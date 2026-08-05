@@ -97,6 +97,54 @@ function Reports() {
         <Stat label="Piutang berjalan" value={rupiah(totalPending)} tone="text-warning" />
       </div>
 
+      {rows.length > 0 && (
+        <section className="ledger-card p-4 sm:p-5">
+          <h2 className="text-base font-semibold">Rekap Hari Ini</h2>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {(() => {
+              const today = new Date().toDateString();
+              const todayRows = rows.filter(
+                (r) => new Date(r.shift.start_time).toDateString() === today,
+              );
+              const todayProfit = todayRows.reduce((s, r) => s + r.summary.profit, 0);
+              const todayTxn = todayRows.reduce((s, r) => s + r.summary.count, 0);
+              const todayDeposit = todayRows.reduce(
+                (s, r) => s + num(r.shift.deposit_amount),
+                0,
+              );
+              const todayOpen = todayRows.filter((r) => r.shift.status === "open").length;
+              return (
+                <>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Shift hari ini</p>
+                    <p className="num mt-1 text-lg font-semibold">{todayRows.length}</p>
+                    {todayOpen > 0 && (
+                      <p className="text-xs text-warning">{todayOpen} masih buka</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Transaksi</p>
+                    <p className="num mt-1 text-lg font-semibold">{todayTxn}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Laba hari ini</p>
+                    <p className="num mt-1 text-lg font-semibold text-success">
+                      {rupiah(todayProfit)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Setoran</p>
+                    <p className="num mt-1 text-lg font-semibold text-cash">
+                      {rupiah(todayDeposit)}
+                    </p>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </section>
+      )}
+
       <section className="ledger-card overflow-x-auto p-4 sm:p-5">
         {shifts.isLoading ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
