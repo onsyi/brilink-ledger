@@ -68,19 +68,6 @@ function CloseShift() {
     },
   });
 
-  const receivables = useQuery({
-    queryKey: ["receivables", shiftId],
-    enabled: !!shiftId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("receivables")
-        .select("*")
-        .eq("shift_id", shiftId!);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
   const [finalCash, setFinalCash] = useState("");
   const [expenses, setExpenses] = useState("");
   const [expenseNotes, setExpenseNotes] = useState("");
@@ -91,9 +78,7 @@ function CloseShift() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   const summary = useMemo(() => summarize(txns.data ?? []), [txns.data]);
-  const pendingDebt = (receivables.data ?? [])
-    .filter((r) => r.status === "pending")
-    .reduce((s, r) => s + num(r.debt_amount), 0);
+  const pendingDebt = 0;
 
   const expected = shiftQuery.data
     ? expectedCash({

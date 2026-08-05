@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, ShieldCheck, Users, BarChart3, HandCoins } from "lucide-react";
+import { Loader2, ShieldCheck, Users, BarChart3 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { num, rupiah, summarize } from "@/lib/ledger";
@@ -16,12 +16,9 @@ export function OwnerOverview({ username }: { username?: string | null }) {
         .limit(60);
       if (error) throw error;
       const ids = (shifts ?? []).map((s) => s.id);
-      const [{ data: txns }, { data: recv }, { data: profiles }] = await Promise.all([
+      const [{ data: txns }, { data: profiles }] = await Promise.all([
         ids.length
           ? supabase.from("transactions").select("*").in("shift_id", ids)
-          : Promise.resolve({ data: [] as never[] }),
-        ids.length
-          ? supabase.from("receivables").select("*").in("shift_id", ids)
           : Promise.resolve({ data: [] as never[] }),
         supabase.from("profiles").select("id, username"),
       ]);
@@ -29,10 +26,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
         (profiles ?? []).find((p) => p.id === id)?.username ?? "kasir";
       const rows = (shifts ?? []).map((s) => {
         const own = (txns ?? []).filter((t) => t.shift_id === s.id);
-        const pendingDebt = (recv ?? [])
-          .filter((r) => r.shift_id === s.id && r.status === "pending")
-          .reduce((acc, r) => acc + num(r.debt_amount), 0);
-        return { shift: s, summary: summarize(own), pendingDebt, cashier: nameOf(s.user_id) };
+        return { shift: s, summary: summarize(own), cashier: nameOf(s.user_id) };
       });
       const today = new Date().toDateString();
       return {
@@ -42,7 +36,6 @@ export function OwnerOverview({ username }: { username?: string | null }) {
           .filter((r) => new Date(r.shift.start_time).toDateString() === today)
           .reduce((s, r) => s + r.summary.profit, 0),
         profitAll: rows.reduce((s, r) => s + r.summary.profit, 0),
-        pendingAll: rows.reduce((s, r) => s + r.pendingDebt, 0),
         cashiers: new Set(rows.map((r) => r.shift.user_id)).size,
       };
     },
@@ -63,7 +56,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
         <div>
           <h1 className="text-lg font-semibold sm:text-xl">Dashboard Owner</h1>
           <p className="text-sm text-muted-foreground">
-            Halo {username ?? "owner"} — pantau shift kasir, laba, dan piutang. Owner tidak membuka
+            Halo {username ?? "owner"} — pantau shift kasir dan laba. Owner tidak membuka
             atau menutup shift; shift hanya dijalankan kasir/teller.
           </p>
         </div>
@@ -72,11 +65,10 @@ export function OwnerOverview({ username }: { username?: string | null }) {
         </span>
       </div>
 
-      <div className="responsive-grid-4">
+      <div className="responsive-grid-3">
         <Kpi label="Shift aktif sekarang" value={String(d?.open.length ?? 0)} tone="text-cash" />
         <Kpi label="Laba hari ini" value={rupiah(d?.profitToday ?? 0)} tone="text-success" />
         <Kpi label="Laba 60 shift terakhir" value={rupiah(d?.profitAll ?? 0)} tone="text-success" />
-        <Kpi label="Piutang berjalan" value={rupiah(d?.pendingAll ?? 0)} tone="text-warning" />
       </div>
 
       <section className="ledger-card p-4 sm:p-5">
@@ -104,9 +96,6 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                   <span>modal {rupiah(r.shift.initial_physical_balance)}</span>
                   <span>{r.summary.count} transaksi</span>
                   <span className="text-success">laba {rupiah(r.summary.profit)}</span>
-                  {r.pendingDebt > 0 && (
-                    <span className="text-warning">piutang {rupiah(r.pendingDebt)}</span>
-                  )}
                 </div>
               </li>
             ))}
@@ -155,11 +144,6 @@ export function OwnerOverview({ username }: { username?: string | null }) {
           <Button asChild variant="secondary" size="sm">
             <Link to="/reports">
               <BarChart3 className="mr-1 size-4" /> Laporan & audit
-            </Link>
-          </Button>
-          <Button asChild variant="secondary" size="sm">
-            <Link to="/receivables">
-              <HandCoins className="mr-1 size-4" /> Kelola piutang
             </Link>
           </Button>
         </div>

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
-import { LayoutDashboard, HandCoins, ClipboardCheck, BarChart3, LogOut, Wallet, WifiOff, Loader2 } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, BarChart3, LogOut, Wallet, WifiOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSessionTimeout } from "@/hooks/useSessionTimeout";
@@ -15,8 +15,7 @@ const nav = [
   { to: "/dashboard", label: "Shift", icon: LayoutDashboard, ownerLabel: "Ringkasan" },
   { to: "/close-shift", label: "Tutup Shift", icon: ClipboardCheck, cashierOnly: true },
   { to: "/deposits", label: "Setoran", icon: Wallet },
-  { to: "/receivables", label: "Piutang", icon: HandCoins },
-  { to: "/reports", label: "Laporan", icon: BarChart3 },
+  { to: "/reports", label: "Laporan", icon: BarChart3, ownerOnly: true },
 ] as const;
 
 function OfflineBadge() {
@@ -69,7 +68,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isOwner = role === "owner";
-  const items = nav.filter((item) => !("cashierOnly" in item && item.cashierOnly && isOwner));
+  const items = nav.filter((item) => {
+    if ("cashierOnly" in item && item.cashierOnly && isOwner) return false;
+    if ("ownerOnly" in item && item.ownerOnly && !isOwner) return false;
+    return true;
+  });
 
   const signOut = async () => {
     await queryClient.cancelQueries();

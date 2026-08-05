@@ -1,44 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { PlayCircle, Plus, Loader2, TriangleAlert, ArrowRight, Star, X, WifiOff, Trash2 } from "lucide-react";
+import { PlayCircle, Loader2, ArrowRight, WifiOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { usePresets } from "@/hooks/usePresets";
-import { isOnline, addPending } from "@/lib/offline-db";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { MoneyInput } from "@/components/MoneyInput";
 import { OwnerOverview } from "@/components/OwnerOverview";
-
-import {
-  ACCOUNTS,
-  BANKS,
-  PPOB_PROVIDERS,
-  TXN_TYPES,
-  type TxnType,
-  accountLabel,
-  cashDelta,
-  expectedCash,
-  num,
-  rupiah,
-  summarize,
-  txnLabel,
-} from "@/lib/ledger";
+import { expectedCash, num, rupiah, summarize } from "@/lib/ledger";
+import { isOnline } from "@/lib/offline-db";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
     meta: [
-      { title: "Shift & Transaksi — Kasir BRILink" },
-      {
-        name: "description",
-        content: "Buka shift, catat transaksi tarik tunai, setor, transfer, PPOB, dan piutang.",
-      },
-      { property: "og:title", content: "Shift & Transaksi — Kasir BRILink" },
-      { property: "og:description", content: "Pencatatan ledger harian agen BRILink & PPOB." },
+      { title: "Shift — Kasir BRILink" },
+      { name: "description", content: "Buka shift, lihat ringkasan mutasi, dan tutup shift." },
+      { property: "og:title", content: "Shift — Kasir BRILink" },
     ],
   }),
   component: Dashboard,
@@ -70,7 +48,6 @@ function Dashboard() {
   if (!shiftQuery.data) return <OpenShiftPanel userId={userId} />;
   return <ActiveShiftPanel shiftId={shiftQuery.data.id} shift={shiftQuery.data} />;
 }
-
 
 function LoadingBlock() {
   return (
@@ -228,8 +205,6 @@ type ShiftRow = {
 };
 
 function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow }) {
-  const queryClient = useQueryClient();
-
   const txns = useQuery({
     queryKey: ["txns", shiftId],
     queryFn: async () => {
@@ -243,28 +218,12 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
     },
   });
 
-  const receivables = useQuery({
-    queryKey: ["receivables", shiftId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("receivables")
-        .select("*")
-        .eq("shift_id", shiftId)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  const summary = useMemo(() => summarize(txns.data ?? []), [txns.data]);
-  const pendingDebt = (receivables.data ?? [])
-    .filter((r) => r.status === "pending")
-    .reduce((s, r) => s + num(r.debt_amount), 0);
+  const summary = summarize(txns.data ?? []);
 
   const expected = expectedCash({
     initial: num(shift.initial_physical_balance),
     cashNet: summary.cashNet,
-    pendingReceivables: pendingDebt,
+    pendingReceivables: 0,
     expenses: num(shift.total_expenses),
   });
 
@@ -292,68 +251,23 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
         </p>
       )}
 
-      <div className="responsive-grid-4">
+      <div className="responsive-grid-3">
         <Kpi label="Ekspektasi kas fisik" value={rupiah(expected)} tone="cash" />
         <Kpi label="Laba bersih shift" value={rupiah(summary.profit)} tone="success" />
-        <Kpi label="Transaksi" value={String(summary.count)} />
-        <Kpi label="Piutang belum lunas" value={rupiah(pendingDebt)} tone="warning" />
+        <Kpi label="Total transaksi" value={String(summary.count)} />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.05fr_1fr]">
-        <TransactionForm shiftId={shiftId} onDone={() => queryClient.invalidateQueries()} />
-        <section className="ledger-card p-4 sm:p-5">
-          <h2 className="text-base font-semibold">Mutasi shift ini</h2>
-          <dl className="num mt-4 grid grid-cols-2 gap-2 text-xs sm:gap-3 sm:text-sm">
-            <Row label="Total pokok" value={rupiah(summary.principal)} />
-            <Row label="Fee pelanggan" value={rupiah(summary.fees)} />
-            <Row label="Biaya provider" value={rupiah(summary.providerCost)} />
-            <Row label="Kas masuk" value={rupiah(summary.cashIn)} />
-            <Row label="Kas keluar" value={rupiah(summary.cashOut)} />
-            <Row label="Pengeluaran" value={rupiah(shift.total_expenses)} />
-          </dl>
-
-          <h3 className="mt-5 text-sm font-semibold sm:mt-6">Riwayat transaksi</h3>
-          <ul className="mt-3 max-h-60 space-y-2 overflow-y-auto pr-1 sm:max-h-80">
-            {txns.isLoading && <li className="text-sm text-muted-foreground">Memuat…</li>}
-            {!txns.isLoading && (txns.data ?? []).length === 0 && (
-              <li className="text-sm text-muted-foreground">Belum ada transaksi.</li>
-            )}
-            {(txns.data ?? []).map((t) => (
-              <li
-                key={t.id}
-                className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{txnLabel(t.transaction_type)}</span>
-                  <span className="num">{rupiah(t.principal_amount)}</span>
-                </div>
-                <div className="num mt-1 flex flex-wrap justify-between gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                  <span>
-                    {accountLabel(t.source_account)} → {accountLabel(t.destination_account)}
-                  </span>
-                  <span>
-                    fee {rupiah(t.customer_fee)} · laba {rupiah(t.profit_net)} · kas{" "}
-                    {rupiah(cashDelta(t))}
-                  </span>
-                </div>
-                {t.note && <p className="mt-1 text-xs text-muted-foreground">{t.note}</p>}
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
-
-      {pendingDebt > 0 && (
-        <p className="flex items-center gap-2 rounded-lg border border-border bg-warning/10 px-3 py-2.5 text-xs sm:px-4 sm:py-3 sm:text-sm">
-          <TriangleAlert className="size-4 shrink-0 text-warning" />
-          <span>
-            Ada {rupiah(pendingDebt)} modal tertahan di piutang pelanggan.{" "}
-            <Link to="/receivables" className="underline">
-              Kelola piutang
-            </Link>
-          </span>
-        </p>
-      )}
+      <section className="ledger-card p-4 sm:p-5">
+        <h2 className="text-base font-semibold">Mutasi shift ini</h2>
+        <dl className="num mt-4 grid grid-cols-2 gap-2 text-xs sm:gap-3 sm:text-sm">
+          <Row label="Total pokok" value={rupiah(summary.principal)} />
+          <Row label="Fee pelanggan" value={rupiah(summary.fees)} />
+          <Row label="Biaya provider" value={rupiah(summary.providerCost)} />
+          <Row label="Kas masuk" value={rupiah(summary.cashIn)} />
+          <Row label="Kas keluar" value={rupiah(summary.cashOut)} />
+          <Row label="Pengeluaran" value={rupiah(shift.total_expenses)} />
+        </dl>
+      </section>
     </div>
   );
 }
@@ -389,361 +303,5 @@ function Kpi({
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`num mt-2 text-lg font-semibold ${toneClass}`}>{value}</p>
     </div>
-  );
-}
-
-function TransactionForm({ shiftId, onDone }: { shiftId: string; onDone: () => void }) {
-  const { presets, addPreset, removePreset } = usePresets();
-  const [type, setType] = useState<TxnType>("tarik_tunai");
-  const txnPreset = TXN_TYPES.find((t) => t.value === type)!;
-  const [source, setSource] = useState(txnPreset.source);
-  const [destination, setDestination] = useState(txnPreset.destination);
-  const [principal, setPrincipal] = useState("");
-  const [fee, setFee] = useState("");
-  const [cost, setCost] = useState("");
-  const [channel, setChannel] = useState<string>("");
-  const [note, setNote] = useState("");
-  const [isDebt, setIsDebt] = useState(false);
-  const [customer, setCustomer] = useState("");
-  const [debt, setDebt] = useState("");
-  const [due, setDue] = useState("");
-  const [savingPreset, setSavingPreset] = useState(false);
-  const [presetName, setPresetName] = useState("");
-
-  const applyType = (value: TxnType) => {
-    const next = TXN_TYPES.find((t) => t.value === value)!;
-    setType(value);
-    setSource(next.source);
-    setDestination(next.destination);
-    setChannel("");
-  };
-
-  const applyPreset = (p: typeof presets[number]) => {
-    setType(p.transactionType as TxnType);
-    setSource(p.source);
-    setDestination(p.destination);
-    setChannel(p.channel);
-    if (p.defaultFee) setFee(p.defaultFee);
-    if (p.defaultCost) setCost(p.defaultCost);
-  };
-
-  const saveAsPreset = () => {
-    if (!presetName.trim()) {
-      toast.error("Nama preset wajib diisi");
-      return;
-    }
-    addPreset({
-      name: presetName.trim(),
-      transactionType: type,
-      source,
-      destination,
-      defaultFee: fee,
-      defaultCost: cost,
-      channel,
-    });
-    setSavingPreset(false);
-    setPresetName("");
-    toast.success("Preset tersimpan");
-  };
-
-  const reset = () => {
-    setPrincipal("");
-    setFee("");
-    setCost("");
-    setNote("");
-    setIsDebt(false);
-    setCustomer("");
-    setDebt("");
-    setDue("");
-  };
-
-  const save = useMutation({
-    mutationFn: async () => {
-      if (Number(principal || 0) <= 0) throw new Error("Nominal pokok wajib diisi");
-      if (isDebt) {
-        if (customer.trim().length < 2) throw new Error("Nama customer wajib diisi");
-        if (Number(debt || 0) <= 0) throw new Error("Nominal piutang wajib diisi");
-      }
-      const clientRef = `${shiftId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const txnPayload = {
-        shift_id: shiftId,
-        transaction_type: type,
-        source_account: source,
-        destination_account: destination,
-        principal_amount: Number(principal || 0),
-        customer_fee: Number(fee || 0),
-        provider_cost: Number(cost || 0),
-        note: [channel, note.trim()].filter(Boolean).join(" · ") || null,
-        client_ref: clientRef,
-      };
-
-      if (!isOnline()) {
-        await addPending({
-          id: clientRef,
-          table: "transactions",
-          payload: txnPayload,
-          createdAt: new Date().toISOString(),
-        });
-        if (isDebt) {
-          await addPending({
-            id: `${clientRef}-recv`,
-            table: "receivables",
-            payload: {
-              shift_id: shiftId,
-              customer_name: customer.trim(),
-              debt_amount: Number(debt || 0),
-              due_date: due || null,
-            },
-            createdAt: new Date().toISOString(),
-          });
-        }
-        return;
-      }
-
-      const { data: txn, error } = await supabase
-        .from("transactions")
-        .insert(txnPayload)
-        .select("id")
-        .single();
-      if (error) throw error;
-
-      if (isDebt) {
-        const { error: recvError } = await supabase.from("receivables").insert({
-          transaction_id: txn.id,
-          shift_id: shiftId,
-          customer_name: customer.trim(),
-          debt_amount: Number(debt || 0),
-          due_date: due || null,
-        });
-        if (recvError) throw recvError;
-      }
-    },
-    onSuccess: () => {
-      if (!isOnline()) {
-        toast.success("Transaksi disimpan offline — akan disinkron saat online");
-      } else {
-        toast.success("Transaksi tercatat");
-      }
-      reset();
-      onDone();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const channels = destination === "saldo_ppob" || source === "saldo_ppob" ? PPOB_PROVIDERS : BANKS;
-
-  return (
-    <section className="ledger-card p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className="text-base font-semibold">Input transaksi</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{txnPreset.hint}</p>
-        </div>
-        {!savingPreset ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="shrink-0 text-xs text-muted-foreground"
-            onClick={() => setSavingPreset(true)}
-          >
-            <Star className="mr-1 size-3" />
-            Simpan preset
-          </Button>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <Input
-              value={presetName}
-              onChange={(e) => setPresetName(e.target.value)}
-              placeholder="Nama preset"
-              className="h-7 w-28 text-xs"
-              onKeyDown={(e) => e.key === "Enter" && saveAsPreset()}
-            />
-            <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={saveAsPreset}>
-              Simpan
-            </Button>
-            <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setSavingPreset(false)}>
-              <X className="size-3" />
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {presets.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {presets.map((p) => (
-            <div key={p.id} className="group relative">
-              <button
-                type="button"
-                onClick={() => applyPreset(p)}
-                className="flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/5 px-2 py-1 text-xs text-primary transition-colors hover:bg-primary/15"
-              >
-                <Star className="size-3" />
-                {p.name}
-              </button>
-              <button
-                type="button"
-                onClick={() => removePreset(p.id)}
-                className="absolute -right-1 -top-1 hidden size-4 items-center justify-center rounded-full bg-destructive text-[8px] text-destructive-foreground group-hover:flex"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-4 sm:gap-2">
-        {TXN_TYPES.map((t) => (
-          <button
-            key={t.value}
-            type="button"
-            onClick={() => applyType(t.value)}
-            className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors sm:px-3 sm:text-sm ${
-              type === t.value
-                ? "border-primary bg-primary/15 text-foreground"
-                : "border-border text-muted-foreground hover:bg-secondary"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <form
-        className="mt-4 space-y-3 sm:mt-5 sm:space-y-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          save.mutate();
-        }}
-      >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground" htmlFor="source">
-              Akun sumber
-            </Label>
-            <select
-              id="source"
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-            >
-              {ACCOUNTS.map((a) => (
-                <option key={a.value} value={a.value} className="bg-card">
-                  {a.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground" htmlFor="destination">
-              Akun tujuan
-            </Label>
-            <select
-              id="destination"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-            >
-              {ACCOUNTS.map((a) => (
-                <option key={a.value} value={a.value} className="bg-card">
-                  {a.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground" htmlFor="channel">
-            Bank / distributor
-          </Label>
-          <select
-            id="channel"
-            value={channel}
-            onChange={(e) => setChannel(e.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-          >
-            <option value="" className="bg-card">
-              — pilih —
-            </option>
-            {channels.map((c) => (
-              <option key={c} value={c} className="bg-card">
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-3">
-          <MoneyInput
-            id="principal"
-            label="Nominal pokok"
-            value={principal}
-            onChange={setPrincipal}
-            required
-          />
-          <MoneyInput id="fee" label="Fee pelanggan" value={fee} onChange={setFee} />
-          <MoneyInput id="cost" label="Biaya provider" value={cost} onChange={setCost} />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground" htmlFor="note">
-            Catatan (opsional)
-          </Label>
-          <Input
-            id="note"
-            value={note}
-            maxLength={200}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="No. rekening, no. pelanggan, dll."
-          />
-        </div>
-
-        <div className="rounded-lg border border-border bg-secondary/40 p-3">
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={isDebt} onCheckedChange={(v) => setIsDebt(v === true)} />
-            Transaksi ini hutang (piutang customer)
-          </label>
-          {isDebt && (
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground" htmlFor="customer">
-                  Nama customer
-                </Label>
-                <Input
-                  id="customer"
-                  value={customer}
-                  maxLength={80}
-                  onChange={(e) => setCustomer(e.target.value)}
-                />
-              </div>
-              <MoneyInput id="debt" label="Nominal piutang" value={debt} onChange={setDebt} />
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground" htmlFor="due">
-                  Janji bayar
-                </Label>
-                <Input
-                  id="due"
-                  type="date"
-                  value={due}
-                  onChange={(e) => setDue(e.target.value)}
-                  className="num"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <Button type="submit" className="w-full" disabled={save.isPending}>
-          {save.isPending ? (
-            <Loader2 className="mr-2 size-4 animate-spin" />
-          ) : (
-            <Plus className="mr-2 size-4" />
-          )}
-          Simpan transaksi
-        </Button>
-      </form>
-    </section>
   );
 }

@@ -15,7 +15,6 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedCloseShiftRouteImport } from './routes/_authenticated/close-shift'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedDepositsRouteImport } from './routes/_authenticated/deposits'
-import { Route as AuthenticatedReceivablesRouteImport } from './routes/_authenticated/receivables'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 
 const IndexRoute = IndexRouteImport.update({
@@ -47,12 +46,6 @@ const AuthenticatedDepositsRoute = AuthenticatedDepositsRouteImport.update({
   path: '/deposits',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedReceivablesRoute =
-  AuthenticatedReceivablesRouteImport.update({
-    id: '/receivables',
-    path: '/receivables',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -65,7 +58,6 @@ export interface FileRoutesByFullPath {
   '/close-shift': typeof AuthenticatedCloseShiftRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/deposits': typeof AuthenticatedDepositsRoute
-  '/receivables': typeof AuthenticatedReceivablesRoute
   '/reports': typeof AuthenticatedReportsRoute
 }
 export interface FileRoutesByTo {
@@ -74,7 +66,6 @@ export interface FileRoutesByTo {
   '/close-shift': typeof AuthenticatedCloseShiftRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/deposits': typeof AuthenticatedDepositsRoute
-  '/receivables': typeof AuthenticatedReceivablesRoute
   '/reports': typeof AuthenticatedReportsRoute
 }
 export interface FileRoutesById {
@@ -85,28 +76,14 @@ export interface FileRoutesById {
   '/_authenticated/close-shift': typeof AuthenticatedCloseShiftRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/deposits': typeof AuthenticatedDepositsRoute
-  '/_authenticated/receivables': typeof AuthenticatedReceivablesRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
-    | '/auth'
-    | '/close-shift'
-    | '/dashboard'
-    | '/deposits'
-    | '/receivables'
-    | '/reports'
+    '/' | '/auth' | '/close-shift' | '/dashboard' | '/deposits' | '/reports'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/auth'
-    | '/close-shift'
-    | '/dashboard'
-    | '/deposits'
-    | '/receivables'
-    | '/reports'
+  to: '/' | '/auth' | '/close-shift' | '/dashboard' | '/deposits' | '/reports'
   id:
     | '__root__'
     | '/'
@@ -115,7 +92,6 @@ export interface FileRouteTypes {
     | '/_authenticated/close-shift'
     | '/_authenticated/dashboard'
     | '/_authenticated/deposits'
-    | '/_authenticated/receivables'
     | '/_authenticated/reports'
   fileRoutesById: FileRoutesById
 }
@@ -169,13 +145,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDepositsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/receivables': {
-      id: '/_authenticated/receivables'
-      path: '/receivables'
-      fullPath: '/receivables'
-      preLoaderRoute: typeof AuthenticatedReceivablesRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/reports': {
       id: '/_authenticated/reports'
       path: '/reports'
@@ -190,7 +159,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCloseShiftRoute: typeof AuthenticatedCloseShiftRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDepositsRoute: typeof AuthenticatedDepositsRoute
-  AuthenticatedReceivablesRoute: typeof AuthenticatedReceivablesRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
 }
 
@@ -198,7 +166,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCloseShiftRoute: AuthenticatedCloseShiftRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDepositsRoute: AuthenticatedDepositsRoute,
-  AuthenticatedReceivablesRoute: AuthenticatedReceivablesRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
 }
 
