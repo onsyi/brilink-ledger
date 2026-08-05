@@ -6,6 +6,7 @@ import { PlayCircle, Loader2, ArrowRight, WifiOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/MoneyInput";
 import { OwnerOverview } from "@/components/OwnerOverview";
 import { expectedCash, num, rupiah, summarize } from "@/lib/ledger";
@@ -60,6 +61,7 @@ function LoadingBlock() {
 function OpenShiftPanel({ userId }: { userId?: string | undefined }) {
   const queryClient = useQueryClient();
   const [initial, setInitial] = useState("");
+  const [branch, setBranch] = useState("");
 
   const lastShift = useQuery({
     queryKey: ["last-closed-shift", userId],
@@ -90,6 +92,7 @@ function OpenShiftPanel({ userId }: { userId?: string | undefined }) {
       const { error } = await supabase.from("shifts").insert({
         user_id: userId!,
         initial_physical_balance: Number(initial || 0),
+        branch: branch || null,
         status: "open",
       });
       if (error) throw error;
@@ -131,6 +134,15 @@ function OpenShiftPanel({ userId }: { userId?: string | undefined }) {
             onChange={setInitial}
             required
           />
+          <div className="space-y-2">
+            <label htmlFor="branch" className="text-sm font-medium">Cabang</label>
+            <Input
+              id="branch"
+              placeholder="Contoh: Mall ABC"
+              value={branch}
+              onChange={(e) => setBranch(e.target.value)}
+            />
+          </div>
           <Button type="submit" className="w-full" disabled={openShift.isPending}>
             {openShift.isPending ? (
               <Loader2 className="mr-2 size-4 animate-spin" />
@@ -202,6 +214,7 @@ type ShiftRow = {
   initial_physical_balance: number | string;
   total_expenses: number | string;
   start_time: string;
+  branch: string | null;
 };
 
 function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow }) {
@@ -235,6 +248,7 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
           <p className="num text-xs text-muted-foreground sm:text-sm">
             Dibuka {new Date(shift.start_time).toLocaleString("id-ID")} · modal{" "}
             {rupiah(shift.initial_physical_balance)}
+            {shift.branch ? ` · ${shift.branch}` : ""}
           </p>
         </div>
         <Button asChild variant="secondary" size="sm">

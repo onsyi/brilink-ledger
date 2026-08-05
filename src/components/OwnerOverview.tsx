@@ -29,13 +29,24 @@ export function OwnerOverview({ username }: { username?: string | null }) {
         return { shift: s, summary: summarize(own), cashier: nameOf(s.user_id) };
       });
       const today = new Date().toDateString();
+      const branchMap = new Map<string, { profit: number; count: number }>();
+      for (const r of rows) {
+        const b = r.shift.branch || "Tanpa cabang";
+        const prev = branchMap.get(b) ?? { profit: 0, count: 0 };
+        prev.profit += r.summary.profit;
+        prev.count += 1;
+        branchMap.set(b, prev);
+      }
+      const branchStats = [...branchMap.entries()]
+        .map(([name, data]) => ({ name, ...data }))
+        .sort((a, b) => b.profit - a.profit);
       return {
         rows,
         open: rows.filter((r) => r.shift.status === "open"),
         profitToday: rows
           .filter((r) => new Date(r.shift.start_time).toDateString() === today)
           .reduce((s, r) => s + r.summary.profit, 0),
-        profitAll: rows.reduce((s, r) => s + r.summary.profit, 0),
+        branchStats,
         cashiers: new Set(rows.map((r) => r.shift.user_id)).size,
       };
     },
@@ -68,8 +79,40 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       <div className="responsive-grid-3">
         <Kpi label="Shift aktif sekarang" value={String(d?.open.length ?? 0)} tone="text-cash" />
         <Kpi label="Laba hari ini" value={rupiah(d?.profitToday ?? 0)} tone="text-success" />
-        <Kpi label="Laba 60 shift terakhir" value={rupiah(d?.profitAll ?? 0)} tone="text-success" />
+        <Kpi label="Total kasir" value={String(d?.cashiers ?? 0)} />
       </div>
+
+      <section className="ledger-card p-4 sm:p-5">
+        <h2 className="text-base font-semibold">Laba per Cabang (60 shift terakhir)</h2>
+        {(d?.branchStats.length ?? 0) === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Belum ada data cabang. Setiap shift akan otomatis terkelompok berdasarkan cabang.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {d?.branchStats.map((b) => {
+              const maxProfit = Math.max(...(d?.branchStats.map((x) => x.profit) ?? [1]));
+              const pct = maxProfit > 0 ? (b.profit / maxProfit) * 100 : 0;
+              return (
+                <div key={b.name}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{b.name}</span>
+                    <span className="num text-muted-foreground">
+                      {rupiah(b.profit)} <span className="text-xs">({b.count} shift)</span>
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full rounded-full bg-success transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <section className="ledger-card p-4 sm:p-5">
         <h2 className="flex items-center gap-2 text-base font-semibold">
@@ -89,6 +132,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-medium">{r.cashier}</span>
                   <span className="num text-xs text-muted-foreground">
+                    {r.shift.branch ? `${r.shift.branch} · ` : ""}
                     dibuka {new Date(r.shift.start_time).toLocaleString("id-ID")}
                   </span>
                 </div>
@@ -106,10 +150,11 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       <section className="ledger-card p-4 sm:p-5">
         <h2 className="text-base font-semibold">Riwayat shift terakhir</h2>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[560px] text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="text-xs text-muted-foreground uppercase">
               <tr>
                 <th className="py-2 text-left">Kasir</th>
+                <th className="py-2 text-left">Cabang</th>
                 <th className="py-2 text-left">Mulai</th>
                 <th className="py-2 text-right">Transaksi</th>
                 <th className="py-2 text-right">Laba</th>
@@ -120,6 +165,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
               {(d?.rows ?? []).slice(0, 10).map((r) => (
                 <tr key={r.shift.id} className="border-t border-border">
                   <td className="py-2 text-left">{r.cashier}</td>
+                  <td className="py-2 text-left text-muted-foreground">{r.shift.branch || "—"}</td>
                   <td className="py-2 text-left">
                     {new Date(r.shift.start_time).toLocaleDateString("id-ID")}
                   </td>
@@ -132,7 +178,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
               ))}
               {(d?.rows ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-3 text-muted-foreground">
+                  <td colSpan={6} className="py-3 text-muted-foreground">
                     Belum ada shift tercatat.
                   </td>
                 </tr>
