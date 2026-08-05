@@ -1,0 +1,178 @@
+import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2, ShieldCheck, Users, BarChart3, HandCoins } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { num, rupiah, summarize } from "@/lib/ledger";
+
+export function OwnerOverview({ username }: { username?: string | null }) {
+  const overview = useQuery({
+    queryKey: ["owner-overview"],
+    queryFn: async () => {
+      const { data: shifts, error } = await supabase
+        .from("shifts")
+        .select("*")
+        .order("start_time", { ascending: false })
+        .limit(60);
+      if (error) throw error;
+      const ids = (shifts ?? []).map((s) => s.id);
+      const [{ data: txns }, { data: recv }, { data: profiles }] = await Promise.all([
+        ids.length
+          ? supabase.from("transactions").select("*").in("shift_id", ids)
+          : Promise.resolve({ data: [] as never[] }),
+        ids.length
+          ? supabase.from("receivables").select("*").in("shift_id", ids)
+          : Promise.resolve({ data: [] as never[] }),
+        supabase.from("profiles").select("id, username"),
+      ]);
+      const nameOf = (id: string) =>
+        (profiles ?? []).find((p) => p.id === id)?.username ?? "kasir";
+      const rows = (shifts ?? []).map((s) => {
+        const own = (txns ?? []).filter((t) => t.shift_id === s.id);
+        const pendingDebt = (recv ?? [])
+          .filter((r) => r.shift_id === s.id && r.status === "pending")
+          .reduce((acc, r) => acc + num(r.debt_amount), 0);
+        return { shift: s, summary: summarize(own), pendingDebt, cashier: nameOf(s.user_id) };
+      });
+      const today = new Date().toDateString();
+      return {
+        rows,
+        open: rows.filter((r) => r.shift.status === "open"),
+        profitToday: rows
+          .filter((r) => new Date(r.shift.start_time).toDateString() === today)
+          .reduce((s, r) => s + r.summary.profit, 0),
+        profitAll: rows.reduce((s, r) => s + r.summary.profit, 0),
+        pendingAll: rows.reduce((s, r) => s + r.pendingDebt, 0),
+        cashiers: new Set(rows.map((r) => r.shift.user_id)).size,
+      };
+    },
+  });
+
+  if (overview.isLoading)
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" /> Memuat ringkasan owner…
+      </div>
+    );
+
+  const d = overview.data;
+
+  return (
+    <div className="space-y-5 sm:space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold sm:text-xl">Dashboard Owner</h1>
+          <p className="text-sm text-muted-foreground">
+            Halo {username ?? "owner"} — pantau shift kasir, laba, dan piutang. Owner tidak membuka
+            atau menutup shift; shift hanya dijalankan kasir/teller.
+          </p>
+        </div>
+        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs">
+          <ShieldCheck className="size-3.5 text-primary" /> Mode audit
+        </span>
+      </div>
+
+      <div className="responsive-grid-4">
+        <Kpi label="Shift aktif sekarang" value={String(d?.open.length ?? 0)} tone="text-cash" />
+        <Kpi label="Laba hari ini" value={rupiah(d?.profitToday ?? 0)} tone="text-success" />
+        <Kpi label="Laba 60 shift terakhir" value={rupiah(d?.profitAll ?? 0)} tone="text-success" />
+        <Kpi label="Piutang berjalan" value={rupiah(d?.pendingAll ?? 0)} tone="text-warning" />
+      </div>
+
+      <section className="ledger-card p-4 sm:p-5">
+        <h2 className="flex items-center gap-2 text-base font-semibold">
+          <Users className="size-4 text-primary" /> Shift kasir yang sedang berjalan
+        </h2>
+        {(d?.open.length ?? 0) === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Tidak ada shift aktif. Kasir dapat membuka shift dari akun masing-masing.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-2 sm:mt-4">
+            {d?.open.map((r) => (
+              <li
+                key={r.shift.id}
+                className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">{r.cashier}</span>
+                  <span className="num text-xs text-muted-foreground">
+                    dibuka {new Date(r.shift.start_time).toLocaleString("id-ID")}
+                  </span>
+                </div>
+                <div className="num mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground sm:gap-x-4">
+                  <span>modal {rupiah(r.shift.initial_physical_balance)}</span>
+                  <span>{r.summary.count} transaksi</span>
+                  <span className="text-success">laba {rupiah(r.summary.profit)}</span>
+                  {r.pendingDebt > 0 && (
+                    <span className="text-warning">piutang {rupiah(r.pendingDebt)}</span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="ledger-card p-4 sm:p-5">
+        <h2 className="text-base font-semibold">Riwayat shift terakhir</h2>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead className="text-xs text-muted-foreground uppercase">
+              <tr>
+                <th className="py-2 text-left">Kasir</th>
+                <th className="py-2 text-left">Mulai</th>
+                <th className="py-2 text-right">Transaksi</th>
+                <th className="py-2 text-right">Laba</th>
+                <th className="py-2 text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody className="num">
+              {(d?.rows ?? []).slice(0, 10).map((r) => (
+                <tr key={r.shift.id} className="border-t border-border">
+                  <td className="py-2 text-left">{r.cashier}</td>
+                  <td className="py-2 text-left">
+                    {new Date(r.shift.start_time).toLocaleDateString("id-ID")}
+                  </td>
+                  <td className="py-2 text-right">{r.summary.count}</td>
+                  <td className="py-2 text-right text-success">{rupiah(r.summary.profit)}</td>
+                  <td className="py-2 text-right">
+                    {r.shift.status === "open" ? "Berjalan" : "Ditutup"}
+                  </td>
+                </tr>
+              ))}
+              {(d?.rows ?? []).length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-3 text-muted-foreground">
+                    Belum ada shift tercatat.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2 sm:mt-5">
+          <Button asChild variant="secondary" size="sm">
+            <Link to="/reports">
+              <BarChart3 className="mr-1 size-4" /> Laporan & audit
+            </Link>
+          </Button>
+          <Button asChild variant="secondary" size="sm">
+            <Link to="/receivables">
+              <HandCoins className="mr-1 size-4" /> Kelola piutang
+            </Link>
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Kpi({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="ledger-card p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={`num mt-2 text-lg font-semibold ${tone ?? "text-foreground"}`}>{value}</p>
+    </div>
+  );
+}

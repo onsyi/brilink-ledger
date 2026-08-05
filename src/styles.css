@@ -1,0 +1,199 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * BRILink & PPOB financial reporting design system.
+ * Deep slate-teal "ledger" surfaces, brass accents for money, emerald/rose
+ * for balance variance. All colors are oklch semantic tokens.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-cash: var(--cash);
+  --color-digital: var(--digital);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --shadow-ledger: 0 1px 0 0 oklch(1 0 0 / 6%) inset, 0 18px 40px -24px oklch(0.1 0.03 220 / 70%);
+  --shadow-raise: 0 24px 60px -30px oklch(0.08 0.03 220 / 85%);
+}
+
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.19 0.026 235);
+  --foreground: oklch(0.97 0.008 220);
+  --card: oklch(0.235 0.03 234);
+  --card-foreground: oklch(0.97 0.008 220);
+  --popover: oklch(0.235 0.03 234);
+  --popover-foreground: oklch(0.97 0.008 220);
+  --primary: oklch(0.79 0.14 84);
+  --primary-foreground: oklch(0.21 0.03 60);
+  --secondary: oklch(0.29 0.035 232);
+  --secondary-foreground: oklch(0.95 0.01 220);
+  --muted: oklch(0.28 0.03 232);
+  --muted-foreground: oklch(0.72 0.024 226);
+  --accent: oklch(0.63 0.11 195);
+  --accent-foreground: oklch(0.18 0.03 232);
+  --destructive: oklch(0.62 0.2 22);
+  --destructive-foreground: oklch(0.98 0.005 220);
+  --success: oklch(0.68 0.15 158);
+  --success-foreground: oklch(0.17 0.04 160);
+  --warning: oklch(0.8 0.15 72);
+  --warning-foreground: oklch(0.2 0.04 70);
+  --cash: oklch(0.79 0.14 84);
+  --digital: oklch(0.68 0.12 200);
+  --border: oklch(0.35 0.03 232);
+  --input: oklch(0.32 0.03 232);
+  --ring: oklch(0.63 0.11 195);
+  --chart-1: oklch(0.79 0.14 84);
+  --chart-2: oklch(0.68 0.12 200);
+  --chart-3: oklch(0.68 0.15 158);
+  --chart-4: oklch(0.62 0.2 22);
+  --chart-5: oklch(0.75 0.09 226);
+  --sidebar: oklch(0.215 0.028 234);
+  --sidebar-foreground: oklch(0.95 0.01 220);
+  --sidebar-primary: oklch(0.79 0.14 84);
+  --sidebar-primary-foreground: oklch(0.21 0.03 60);
+  --sidebar-accent: oklch(0.29 0.035 232);
+  --sidebar-accent-foreground: oklch(0.95 0.01 220);
+  --sidebar-border: oklch(0.33 0.03 232);
+  --sidebar-ring: oklch(0.63 0.11 195);
+}
+
+.dark {
+  --background: oklch(0.19 0.026 235);
+  --foreground: oklch(0.97 0.008 220);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    background-image:
+      radial-gradient(60rem 40rem at 12% -10%, oklch(0.63 0.11 195 / 14%), transparent 70%),
+      radial-gradient(50rem 36rem at 92% 0%, oklch(0.79 0.14 84 / 10%), transparent 70%);
+    background-attachment: fixed;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+}
+
+@utility ledger-card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-ledger);
+}
+
+@utility num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Responsive utilities */
+@utility responsive-card-stack {
+  display: grid;
+  gap: theme(spacing.4);
+  @media (min-width: 640px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @media (min-width: 1024px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@utility responsive-grid-2 {
+  display: grid;
+  gap: theme(spacing.4);
+  grid-template-columns: 1fr;
+  @media (min-width: 640px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@utility responsive-grid-3 {
+  display: grid;
+  gap: theme(spacing.4);
+  grid-template-columns: 1fr;
+  @media (min-width: 640px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @media (min-width: 1024px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@utility responsive-grid-4 {
+  display: grid;
+  gap: theme(spacing.4);
+  grid-template-columns: 1fr;
+  @media (min-width: 480px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @media (min-width: 1024px) {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Hide scrollbar for horizontal scroll */
+@utility hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
