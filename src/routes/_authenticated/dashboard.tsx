@@ -2,10 +2,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { PlayCircle, Plus, Loader2, TriangleAlert, ArrowRight, Star, X } from "lucide-react";
+import { PlayCircle, Plus, Loader2, TriangleAlert, ArrowRight, Star, X, WifiOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePresets } from "@/hooks/usePresets";
+import { isOnline, addPending } from "@/lib/offline-db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -284,6 +285,13 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
         </Button>
       </div>
 
+      {!isOnline() && (
+        <p className="flex items-center gap-2 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2.5 text-xs sm:text-sm">
+          <WifiOff className="size-4 shrink-0 text-warning" />
+          Mode offline — transaksi akan disinkron otomatis saat koneksi pulih.
+        </p>
+      )}
+
       <div className="responsive-grid-4">
         <Kpi label="Ekspektasi kas fisik" value={rupiah(expected)} tone="cash" />
         <Kpi label="Laba bersih shift" value={rupiah(summary.profit)} tone="success" />
@@ -457,19 +465,44 @@ function TransactionForm({ shiftId, onDone }: { shiftId: string; onDone: () => v
         if (Number(debt || 0) <= 0) throw new Error("Nominal piutang wajib diisi");
       }
       const clientRef = `${shiftId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const txnPayload = {
+        shift_id: shiftId,
+        transaction_type: type,
+        source_account: source,
+        destination_account: destination,
+        principal_amount: Number(principal || 0),
+        customer_fee: Number(fee || 0),
+        provider_cost: Number(cost || 0),
+        note: [channel, note.trim()].filter(Boolean).join(" · ") || null,
+        client_ref: clientRef,
+      };
+
+      if (!isOnline()) {
+        await addPending({
+          id: clientRef,
+          table: "transactions",
+          payload: txnPayload,
+          createdAt: new Date().toISOString(),
+        });
+        if (isDebt) {
+          await addPending({
+            id: `${clientRef}-recv`,
+            table: "receivables",
+            payload: {
+              shift_id: shiftId,
+              customer_name: customer.trim(),
+              debt_amount: Number(debt || 0),
+              due_date: due || null,
+            },
+            createdAt: new Date().toISOString(),
+          });
+        }
+        return;
+      }
+
       const { data: txn, error } = await supabase
         .from("transactions")
-        .insert({
-          shift_id: shiftId,
-          transaction_type: type,
-          source_account: source,
-          destination_account: destination,
-          principal_amount: Number(principal || 0),
-          customer_fee: Number(fee || 0),
-          provider_cost: Number(cost || 0),
-          note: [channel, note.trim()].filter(Boolean).join(" · ") || null,
-          client_ref: clientRef,
-        })
+        .insert(txnPayload)
         .select("id")
         .single();
       if (error) throw error;
@@ -486,7 +519,11 @@ function TransactionForm({ shiftId, onDone }: { shiftId: string; onDone: () => v
       }
     },
     onSuccess: () => {
-      toast.success("Transaksi tercatat");
+      if (!isOnline()) {
+        toast.success("Transaksi disimpan offline — akan disinkron saat online");
+      } else {
+        toast.success("Transaksi tercatat");
+      }
       reset();
       onDone();
     },

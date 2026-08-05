@@ -4,6 +4,7 @@ import {
   createRootRouteWithContext,
   useRouter,
 } from "@tanstack/react-router";
+import type { QueryClient } from "@tanstack/react-query";
 
 function NotFoundComponent() {
   return (

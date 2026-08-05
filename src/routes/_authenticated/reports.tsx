@@ -107,7 +107,7 @@ function Reports() {
         ) : (
           <>
             {/* Desktop table */}
-            <table className="hidden w-full min-w-[920px] text-sm md:table">
+            <table className="hidden w-full min-w-[1100px] text-sm md:table">
               <thead className="text-left text-xs tracking-wide text-muted-foreground uppercase">
                 <tr>
                   <th className="pb-3">Shift</th>
@@ -118,6 +118,8 @@ function Reports() {
                   <th className="pb-3">Ekspektasi</th>
                   <th className="pb-3">Kas akhir</th>
                   <th className="pb-3">Selisih</th>
+                  <th className="pb-3">Pengeluaran</th>
+                  <th className="pb-3">Top-up</th>
                   <th className="pb-3">Setoran</th>
                   <th className="pb-3">Status</th>
                 </tr>
@@ -148,6 +150,19 @@ function Reports() {
                     >
                       {variance === null ? "—" : rupiah(variance)}
                     </td>
+                    <td className="py-3">
+                      {num(shift.total_expenses) > 0 ? (
+                        <span className="group relative cursor-default">
+                          {rupiah(shift.total_expenses)}
+                          {shift.expense_notes && (
+                            <span className="pointer-events-none absolute bottom-full left-0 z-10 mb-1 hidden w-48 rounded-lg border border-border bg-popover p-2 text-xs text-popover-foreground shadow-md group-hover:block">
+                              {shift.expense_notes}
+                            </span>
+                          )}
+                        </span>
+                      ) : "—"}
+                    </td>
+                    <td className="py-3">{num(shift.topup_request) > 0 ? rupiah(shift.topup_request) : "—"}</td>
                     <td className="py-3">{rupiah(shift.deposit_amount)}</td>
                     <td className="py-3">
                       <span className={shift.status === "open" ? "text-warning" : "text-muted-foreground"}>
@@ -203,10 +218,21 @@ function Reports() {
                       </span>
                     </div>
                     <div className="flex justify-between">
+                      <span className="text-muted-foreground">Pengeluaran</span>
+                      <span>{num(shift.total_expenses) > 0 ? rupiah(shift.total_expenses) : "—"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Top-up</span>
+                      <span>{num(shift.topup_request) > 0 ? rupiah(shift.topup_request) : "—"}</span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-muted-foreground">Setoran</span>
                       <span>{rupiah(shift.deposit_amount)}</span>
                     </div>
                   </div>
+                  {shift.expense_notes && (
+                    <p className="mt-2 text-xs text-muted-foreground">Catatan: {shift.expense_notes}</p>
+                  )}
                 </li>
               ))}
             </ul>
