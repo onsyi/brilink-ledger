@@ -1,14 +1,15 @@
 import type { ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
-import { LayoutDashboard, HandCoins, ClipboardCheck, BarChart3, LogOut, Wallet } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { LayoutDashboard, HandCoins, ClipboardCheck, BarChart3, LogOut, Wallet, WifiOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSessionTimeout } from "@/hooks/useSessionTimeout";
 import { SessionTimeoutDialog } from "@/components/SessionTimeoutDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getAllPending, isOnline } from "@/lib/offline-db";
 
 const nav = [
   { to: "/dashboard", label: "Shift", icon: LayoutDashboard, ownerLabel: "Ringkasan" },
@@ -17,6 +18,50 @@ const nav = [
   { to: "/receivables", label: "Piutang", icon: HandCoins },
   { to: "/reports", label: "Laporan", icon: BarChart3 },
 ] as const;
+
+function OfflineBadge() {
+  const [count, setCount] = useState(0);
+  const [online, setOnline] = useState(isOnline());
+
+  useEffect(() => {
+    const check = async () => {
+      setOnline(isOnline());
+      const pending = await getAllPending();
+      setCount(pending.length);
+    };
+    check();
+    const interval = setInterval(check, 5000);
+    const onOnline = () => check();
+    const onOffline = () => check();
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
+  if (online && count === 0) return null;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
+        !online
+          ? "border border-warning/50 bg-warning/10 text-warning"
+          : "border border-primary/50 bg-primary/10 text-primary",
+      )}
+    >
+      {!online ? (
+        <WifiOff className="size-3" />
+      ) : (
+        <Loader2 className="size-3 animate-spin" />
+      )}
+      {!online ? "Offline" : `Sync ${count}`}
+    </span>
+  );
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { username, role } = useAuth();
@@ -68,6 +113,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-3">
+            <OfflineBadge />
             <div className="text-right text-xs leading-tight">
               <div className="font-medium">{username ?? "—"}</div>
               <div className="text-muted-foreground uppercase">{role ?? ""}</div>
@@ -87,6 +133,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             Kasir<span className="text-primary">BRILink</span>
           </Link>
           <div className="flex items-center gap-2">
+            <OfflineBadge />
             <span className="text-xs text-muted-foreground">{username ?? "—"}</span>
             <Button size="sm" variant="ghost" onClick={signOut} className="h-8 w-8 p-0">
               <LogOut className="size-4" />
