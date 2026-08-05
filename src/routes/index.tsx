@@ -5,7 +5,6 @@ import {
   Wallet,
   Layers,
   Clock,
-  HandCoins,
   ArrowRight,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -18,13 +17,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Ganti buku tulis dan Excel: catat kas fisik dan saldo digital sekaligus, pantau piutang pelanggan, dan tutup shift dalam 10 menit.",
+          "Ganti buku tulis dan Excel: catat kas fisik dan saldo digital sekaligus, dan tutup shift dalam 10 menit.",
       },
       { property: "og:title", content: "Kasir BRILink — Pembukuan Agen BRILink & PPOB" },
       {
         property: "og:description",
         content:
-          "Sistem akuntansi shift untuk agen BRILink & PPOB: ledger dua kantong uang, piutang, laba bersih real-time.",
+          "Sistem akuntansi shift untuk agen BRILink & PPOB: ledger dua kantong uang, laba bersih real-time.",
       },
     ],
   }),
@@ -36,11 +35,6 @@ const features = [
     icon: Wallet,
     title: "Dua kantong uang",
     body: "Setiap transaksi menggerakkan kas fisik dan saldo digital sekaligus, tersinkron otomatis.",
-  },
-  {
-    icon: HandCoins,
-    title: "Piutang terkunci",
-    body: "Nama pelanggan, nominal, dan tanggal janji bayar tercatat — modal tidak dianggap hilang.",
   },
   {
     icon: Layers,
@@ -79,7 +73,7 @@ function Landing() {
         </h1>
         <p className="mt-4 text-sm text-muted-foreground sm:mt-5 sm:text-base md:text-lg">
           Kas di laci dan saldo di EDC bergerak bersamaan dalam satu transaksi. Aplikasi ini mencatat
-          keduanya secara atomik, melacak piutang pelanggan, dan menutup shift dengan laporan
+          keduanya secara atomik dan menutup shift dengan laporan
           variance yang bisa diaudit.
         </p>
         <div className="mt-6 flex flex-wrap gap-3 sm:mt-8">
@@ -126,7 +120,7 @@ function Landing() {
         <div>
           <h2 className="text-lg font-semibold sm:text-xl">Kasir</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Buka shift, input transaksi dengan preset cepat, catat piutang, lalu tutup shift dengan
+            Buka shift, input transaksi dengan preset cepat, lalu tutup shift dengan
             saldo bank dan PPOB.
           </p>
         </div>

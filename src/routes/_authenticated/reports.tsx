@@ -38,27 +38,22 @@ function Reports() {
       if (error) throw error;
       const ids = (shiftRows ?? []).map((s) => s.id);
       if (ids.length === 0) return [];
-      const [{ data: txns }, { data: recv }, { data: profiles }] = await Promise.all([
+      const [{ data: txns }, { data: profiles }] = await Promise.all([
         supabase.from("transactions").select("*").in("shift_id", ids),
-        supabase.from("receivables").select("*").in("shift_id", ids),
         supabase.from("profiles").select("id, username"),
       ]);
       return (shiftRows ?? []).map((s) => {
         const own = (txns ?? []).filter((t) => t.shift_id === s.id);
         const summary = summarize(own);
-        const pendingDebt = (recv ?? [])
-          .filter((r) => r.shift_id === s.id && r.status === "pending")
-          .reduce((acc, r) => acc + num(r.debt_amount), 0);
         const expected = expectedCash({
           initial: num(s.initial_physical_balance),
           cashNet: summary.cashNet,
-          pendingReceivables: pendingDebt,
+          pendingReceivables: 0,
           expenses: num(s.total_expenses),
         });
         return {
           shift: s,
           summary,
-          pendingDebt,
           expected,
           variance: s.final_physical_balance === null ? null : num(s.final_physical_balance) - expected,
           cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
@@ -70,7 +65,6 @@ function Reports() {
   const rows = shifts.data ?? [];
   const totalProfit = rows.reduce((s, r) => s + r.summary.profit, 0);
   const totalDeposit = rows.reduce((s, r) => s + num(r.shift.deposit_amount), 0);
-  const totalPending = rows.reduce((s, r) => s + r.pendingDebt, 0);
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -94,7 +88,6 @@ function Reports() {
       <div className="responsive-grid-3">
         <Stat label="Total laba bersih" value={rupiah(totalProfit)} tone="text-success" />
         <Stat label="Total setoran kasir" value={rupiah(totalDeposit)} tone="text-cash" />
-        <Stat label="Piutang berjalan" value={rupiah(totalPending)} tone="text-warning" />
       </div>
 
       {rows.length > 0 && (
