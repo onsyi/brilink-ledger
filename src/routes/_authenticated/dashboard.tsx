@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { PlayCircle, Plus, Loader2, TriangleAlert, ArrowRight, Star, X, WifiOff } from "lucide-react";
+import { PlayCircle, Plus, Loader2, TriangleAlert, ArrowRight, Star, X, WifiOff, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePresets } from "@/hooks/usePresets";

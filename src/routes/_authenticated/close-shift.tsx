@@ -88,6 +88,7 @@ function CloseShift() {
   const [deposit, setDeposit] = useState("");
   const [banks, setBanks] = useState<Record<string, string>>({});
   const [ppob, setPpob] = useState<Record<string, string>>({});
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const summary = useMemo(() => summarize(txns.data ?? []), [txns.data]);
   const pendingDebt = (receivables.data ?? [])
@@ -196,7 +197,7 @@ function CloseShift() {
       className="space-y-5 sm:space-y-6"
       onSubmit={(e) => {
         e.preventDefault();
-        close.mutate();
+        setShowConfirm(true);
       }}
     >
       <div>
@@ -315,6 +316,41 @@ function CloseShift() {
         )}
         Tutup shift
       </Button>
+
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="ledger-card w-full max-w-md p-6 text-center">
+            <ClipboardCheck className="mx-auto size-8 text-primary" />
+            <h2 className="mt-4 text-lg font-semibold">Konfirmasi Tutup Shift</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Pastikan semua data sudah benar. Shift yang ditutup tidak dapat diubah kecuali oleh owner.
+            </p>
+            {variance !== 0 && (
+              <p className="mt-2 text-sm font-medium text-destructive">
+                Selisih: {rupiah(variance)}
+              </p>
+            )}
+            <div className="mt-6 flex gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setShowConfirm(false)}
+              >
+                Batal
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={close.isPending}
+                onClick={() => close.mutate()}
+              >
+                {close.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                Ya, Tutup Shift
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }
