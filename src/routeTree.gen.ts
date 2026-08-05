@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedCloseShiftRouteImport } from './routes/_authenticated/close-shift'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedDepositsRouteImport } from './routes/_authenticated/deposits'
 import { Route as AuthenticatedReceivablesRouteImport } from './routes/_authenticated/receivables'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 
@@ -41,6 +42,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedDepositsRoute = AuthenticatedDepositsRouteImport.update({
+  id: '/deposits',
+  path: '/deposits',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedReceivablesRoute =
   AuthenticatedReceivablesRouteImport.update({
     id: '/receivables',
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/close-shift': typeof AuthenticatedCloseShiftRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/deposits': typeof AuthenticatedDepositsRoute
   '/receivables': typeof AuthenticatedReceivablesRoute
   '/reports': typeof AuthenticatedReportsRoute
 }
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/close-shift': typeof AuthenticatedCloseShiftRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/deposits': typeof AuthenticatedDepositsRoute
   '/receivables': typeof AuthenticatedReceivablesRoute
   '/reports': typeof AuthenticatedReportsRoute
 }
@@ -76,16 +84,29 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/close-shift': typeof AuthenticatedCloseShiftRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/deposits': typeof AuthenticatedDepositsRoute
   '/_authenticated/receivables': typeof AuthenticatedReceivablesRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/auth' | '/close-shift' | '/dashboard' | '/receivables' | '/reports'
+    | '/'
+    | '/auth'
+    | '/close-shift'
+    | '/dashboard'
+    | '/deposits'
+    | '/receivables'
+    | '/reports'
   fileRoutesByTo: FileRoutesByTo
   to:
-    '/' | '/auth' | '/close-shift' | '/dashboard' | '/receivables' | '/reports'
+    | '/'
+    | '/auth'
+    | '/close-shift'
+    | '/dashboard'
+    | '/deposits'
+    | '/receivables'
+    | '/reports'
   id:
     | '__root__'
     | '/'
@@ -93,6 +114,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/close-shift'
     | '/_authenticated/dashboard'
+    | '/_authenticated/deposits'
     | '/_authenticated/receivables'
     | '/_authenticated/reports'
   fileRoutesById: FileRoutesById
@@ -140,6 +162,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/deposits': {
+      id: '/_authenticated/deposits'
+      path: '/deposits'
+      fullPath: '/deposits'
+      preLoaderRoute: typeof AuthenticatedDepositsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/receivables': {
       id: '/_authenticated/receivables'
       path: '/receivables'
@@ -160,6 +189,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedCloseShiftRoute: typeof AuthenticatedCloseShiftRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedDepositsRoute: typeof AuthenticatedDepositsRoute
   AuthenticatedReceivablesRoute: typeof AuthenticatedReceivablesRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
 }
@@ -167,6 +197,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCloseShiftRoute: AuthenticatedCloseShiftRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedDepositsRoute: AuthenticatedDepositsRoute,
   AuthenticatedReceivablesRoute: AuthenticatedReceivablesRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
 }

@@ -1,15 +1,19 @@
 import type { ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, HandCoins, ClipboardCheck, BarChart3, LogOut } from "lucide-react";
+import { useCallback } from "react";
+import { LayoutDashboard, HandCoins, ClipboardCheck, BarChart3, LogOut, Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSessionTimeout } from "@/hooks/useSessionTimeout";
+import { SessionTimeoutDialog } from "@/components/SessionTimeoutDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { to: "/dashboard", label: "Shift", icon: LayoutDashboard, ownerLabel: "Ringkasan" },
   { to: "/close-shift", label: "Tutup Shift", icon: ClipboardCheck, cashierOnly: true },
+  { to: "/deposits", label: "Setoran", icon: Wallet },
   { to: "/receivables", label: "Piutang", icon: HandCoins },
   { to: "/reports", label: "Laporan", icon: BarChart3 },
 ] as const;
@@ -29,8 +33,19 @@ export function AppShell({ children }: { children: ReactNode }) {
     navigate({ to: "/auth", replace: true });
   };
 
+  const handleTimeout = useCallback(() => {
+    signOut();
+  }, []);
+
+  const { showWarning, extendSession } = useSessionTimeout(handleTimeout);
+
   return (
     <div className="min-h-screen pb-16 md:pb-0">
+      <SessionTimeoutDialog
+        open={showWarning}
+        onExtend={extendSession}
+        onLogout={handleTimeout}
+      />
       {/* Desktop header */}
       <header className="sticky top-0 z-20 hidden border-b border-border bg-background/85 backdrop-blur md:block">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3 lg:px-6">

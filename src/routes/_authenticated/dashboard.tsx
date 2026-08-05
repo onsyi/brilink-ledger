@@ -2,9 +2,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { PlayCircle, Plus, Loader2, TriangleAlert, ArrowRight } from "lucide-react";
+import { PlayCircle, Plus, Loader2, TriangleAlert, ArrowRight, Star, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { usePresets } from "@/hooks/usePresets";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -384,10 +385,11 @@ function Kpi({
 }
 
 function TransactionForm({ shiftId, onDone }: { shiftId: string; onDone: () => void }) {
+  const { presets, addPreset, removePreset } = usePresets();
   const [type, setType] = useState<TxnType>("tarik_tunai");
-  const preset = TXN_TYPES.find((t) => t.value === type)!;
-  const [source, setSource] = useState(preset.source);
-  const [destination, setDestination] = useState(preset.destination);
+  const txnPreset = TXN_TYPES.find((t) => t.value === type)!;
+  const [source, setSource] = useState(txnPreset.source);
+  const [destination, setDestination] = useState(txnPreset.destination);
   const [principal, setPrincipal] = useState("");
   const [fee, setFee] = useState("");
   const [cost, setCost] = useState("");
@@ -397,6 +399,8 @@ function TransactionForm({ shiftId, onDone }: { shiftId: string; onDone: () => v
   const [customer, setCustomer] = useState("");
   const [debt, setDebt] = useState("");
   const [due, setDue] = useState("");
+  const [savingPreset, setSavingPreset] = useState(false);
+  const [presetName, setPresetName] = useState("");
 
   const applyType = (value: TxnType) => {
     const next = TXN_TYPES.find((t) => t.value === value)!;
@@ -404,6 +408,34 @@ function TransactionForm({ shiftId, onDone }: { shiftId: string; onDone: () => v
     setSource(next.source);
     setDestination(next.destination);
     setChannel("");
+  };
+
+  const applyPreset = (p: typeof presets[number]) => {
+    setType(p.transactionType as TxnType);
+    setSource(p.source);
+    setDestination(p.destination);
+    setChannel(p.channel);
+    if (p.defaultFee) setFee(p.defaultFee);
+    if (p.defaultCost) setCost(p.defaultCost);
+  };
+
+  const saveAsPreset = () => {
+    if (!presetName.trim()) {
+      toast.error("Nama preset wajib diisi");
+      return;
+    }
+    addPreset({
+      name: presetName.trim(),
+      transactionType: type,
+      source,
+      destination,
+      defaultFee: fee,
+      defaultCost: cost,
+      channel,
+    });
+    setSavingPreset(false);
+    setPresetName("");
+    toast.success("Preset tersimpan");
   };
 
   const reset = () => {
@@ -465,8 +497,64 @@ function TransactionForm({ shiftId, onDone }: { shiftId: string; onDone: () => v
 
   return (
     <section className="ledger-card p-4 sm:p-5">
-      <h2 className="text-base font-semibold">Input transaksi</h2>
-      <p className="mt-1 text-xs text-muted-foreground">{preset.hint}</p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h2 className="text-base font-semibold">Input transaksi</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{txnPreset.hint}</p>
+        </div>
+        {!savingPreset ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="shrink-0 text-xs text-muted-foreground"
+            onClick={() => setSavingPreset(true)}
+          >
+            <Star className="mr-1 size-3" />
+            Simpan preset
+          </Button>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <Input
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+              placeholder="Nama preset"
+              className="h-7 w-28 text-xs"
+              onKeyDown={(e) => e.key === "Enter" && saveAsPreset()}
+            />
+            <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={saveAsPreset}>
+              Simpan
+            </Button>
+            <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setSavingPreset(false)}>
+              <X className="size-3" />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {presets.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {presets.map((p) => (
+            <div key={p.id} className="group relative">
+              <button
+                type="button"
+                onClick={() => applyPreset(p)}
+                className="flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/5 px-2 py-1 text-xs text-primary transition-colors hover:bg-primary/15"
+              >
+                <Star className="size-3" />
+                {p.name}
+              </button>
+              <button
+                type="button"
+                onClick={() => removePreset(p.id)}
+                className="absolute -right-1 -top-1 hidden size-4 items-center justify-center rounded-full bg-destructive text-[8px] text-destructive-foreground group-hover:flex"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-4 sm:gap-2">
         {TXN_TYPES.map((t) => (
