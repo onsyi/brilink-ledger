@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, HandCoins, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +53,10 @@ function Receivables() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const [payId, setPayId] = useState<string | null>(null);
+  const [payName, setPayName] = useState("");
+  const [payAmount, setPayAmount] = useState(0);
 
   const rows = list.data ?? [];
   const pending = rows.filter((r) => r.status === "pending");
@@ -135,7 +140,11 @@ function Receivables() {
                             size="sm"
                             variant="secondary"
                             disabled={pay.isPending}
-                            onClick={() => pay.mutate(r.id)}
+                            onClick={() => {
+                              setPayId(r.id);
+                              setPayName(r.customer_name);
+                              setPayAmount(num(r.debt_amount));
+                            }}
                           >
                             Tandai lunas
                           </Button>
@@ -182,7 +191,11 @@ function Receivables() {
                         size="sm"
                         variant="secondary"
                         disabled={pay.isPending}
-                        onClick={() => pay.mutate(r.id)}
+                        onClick={() => {
+                          setPayId(r.id);
+                          setPayName(r.customer_name);
+                          setPayAmount(num(r.debt_amount));
+                        }}
                         className="mt-3 w-full"
                       >
                         Tandai lunas
@@ -195,6 +208,40 @@ function Receivables() {
           </>
         )}
       </section>
+
+      {payId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="ledger-card w-full max-w-sm p-6 text-center">
+            <CheckCircle2 className="mx-auto size-8 text-success" />
+            <h2 className="mt-4 text-lg font-semibold">Tandai Lunas</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Piutang <span className="font-semibold">{payName}</span> sebesar{" "}
+              <span className="font-semibold text-cash">{rupiah(payAmount)}</span> akan ditandai lunas.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setPayId(null)}
+              >
+                Batal
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={pay.isPending}
+                onClick={() => {
+                  pay.mutate(payId);
+                  setPayId(null);
+                }}
+              >
+                {pay.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                Ya, Lunas
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

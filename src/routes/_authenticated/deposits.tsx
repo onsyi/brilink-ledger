@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, Loader2, Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -63,6 +64,9 @@ function Deposits() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [confirmAmount, setConfirmAmount] = useState(0);
 
   const rows = shifts.data ?? [];
   const totalPending = rows.reduce((s, r) => s + num(r.deposit_amount), 0);
@@ -135,7 +139,10 @@ function Deposits() {
                           size="sm"
                           variant="secondary"
                           disabled={confirmDeposit.isPending}
-                          onClick={() => confirmDeposit.mutate(s.id)}
+                          onClick={() => {
+                            setConfirmId(s.id);
+                            setConfirmAmount(num(s.deposit_amount));
+                          }}
                         >
                           <CheckCircle2 className="mr-1 size-3.5" />
                           Konfirmasi
@@ -181,7 +188,10 @@ function Deposits() {
                       size="sm"
                       variant="secondary"
                       disabled={confirmDeposit.isPending}
-                      onClick={() => confirmDeposit.mutate(s.id)}
+                      onClick={() => {
+                        setConfirmId(s.id);
+                        setConfirmAmount(num(s.deposit_amount));
+                      }}
                       className="mt-3 w-full"
                     >
                       <CheckCircle2 className="mr-1 size-3.5" />
@@ -194,6 +204,40 @@ function Deposits() {
           </>
         )}
       </section>
+
+      {confirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="ledger-card w-full max-w-sm p-6 text-center">
+            <CheckCircle2 className="mx-auto size-8 text-primary" />
+            <h2 className="mt-4 text-lg font-semibold">Konfirmasi Setoran</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Anda yakin telah menerima setoran tunai sebesar{" "}
+              <span className="font-semibold text-cash">{rupiah(confirmAmount)}</span> dari kasir?
+            </p>
+            <div className="mt-6 flex gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setConfirmId(null)}
+              >
+                Batal
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={confirmDeposit.isPending}
+                onClick={() => {
+                  confirmDeposit.mutate(confirmId);
+                  setConfirmId(null);
+                }}
+              >
+                {confirmDeposit.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                Ya, Diterima
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
