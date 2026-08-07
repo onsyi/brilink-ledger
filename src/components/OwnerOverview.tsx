@@ -1,19 +1,39 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, ShieldCheck, Users, BarChart3 } from "lucide-react";
+import { useState } from "react";
+import { Loader2, ShieldCheck, Users, BarChart3, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { num, rupiah, summarize } from "@/lib/ledger";
 
 export function OwnerOverview({ username }: { username?: string | null }) {
-  const overview = useQuery({
-    queryKey: ["owner-overview"],
+  const [branchFilter, setBranchFilter] = useState<string>("all");
+
+  const branches = useQuery({
+    queryKey: ["branches"],
     queryFn: async () => {
-      const { data: shifts, error } = await supabase
+      const { data, error } = await supabase
+        .from("branches")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const overview = useQuery({
+    queryKey: ["owner-overview", branchFilter],
+    queryFn: async () => {
+      let query = supabase
         .from("shifts")
         .select("*")
         .order("start_time", { ascending: false })
         .limit(60);
+      if (branchFilter !== "all") {
+        query = query.eq("branch_id", branchFilter);
+      }
+      const { data: shifts, error } = await query;
       if (error) throw error;
       const ids = (shifts ?? []).map((s) => s.id);
       const [{ data: txns }, { data: profiles }] = await Promise.all([
@@ -27,12 +47,12 @@ export function OwnerOverview({ username }: { username?: string | null }) {
         const own = (txns ?? []).filter((t) => t.shift_id === s.id);
         return { shift: s, summary: summarize(own), cashier: nameOf(s.user_id) };
       });
-      const today = new Date().toDateString();
+      const today = new Date().toLocaleDateString("id-ID");
       return {
         rows,
         open: rows.filter((r) => r.shift.status === "open"),
         profitToday: rows
-          .filter((r) => new Date(r.shift.start_time).toDateString() === today)
+          .filter((r) => new Date(r.shift.start_time).toLocaleDateString("id-ID") === today)
           .reduce((s, r) => s + r.summary.profit, 0),
         cashiers: new Set(rows.map((r) => r.shift.user_id)).size,
       };
@@ -54,13 +74,28 @@ export function OwnerOverview({ username }: { username?: string | null }) {
         <div>
           <h1 className="text-lg font-semibold sm:text-xl">Dashboard Owner</h1>
           <p className="text-sm text-muted-foreground">
-            Halo {username ?? "owner"} — pantau shift kasir dan laba. Owner tidak membuka atau
-            menutup shift; shift hanya dijalankan kasir/teller.
+            Halo {username ?? "owner"} — pantau shift kasir dan laba.
           </p>
         </div>
-        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs">
-          <ShieldCheck className="size-3.5 text-primary" /> Mode audit
-        </span>
+        <div className="flex items-center gap-2">
+          {branches.data && branches.data.length > 0 && (
+            <select
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+              className="h-8 rounded-lg border border-border bg-secondary px-2 text-xs"
+            >
+              <option value="all">Semua Cabang</option>
+              {branches.data.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs">
+            <ShieldCheck className="size-3.5 text-primary" /> Mode audit
+          </span>
+        </div>
       </div>
 
       <div className="responsive-grid-3">

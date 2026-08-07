@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, User, Shield, Users, ArrowLeft, Copy, Check, KeyRound } from "lucide-react";
@@ -9,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BranchManagement } from "@/components/BranchManagement";
 
 import {
   Dialog,
@@ -36,6 +38,8 @@ type UserProfile = {
   created_at: string;
   email?: string;
   role?: AppRole;
+  branch_id?: string | null;
+  branch_name?: string | null;
 };
 
 function SettingsPage() {
@@ -56,6 +60,7 @@ function SettingsPage() {
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newUsername, setNewUsername] = useState("");
+  const [newBranchId, setNewBranchId] = useState<string>("");
   const [addingCashier, setAddingCashier] = useState(false);
 
   const [showResetPassword, setShowResetPassword] = useState(false);
@@ -65,6 +70,20 @@ function SettingsPage() {
   const [resettingPassword, setResettingPassword] = useState(false);
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const branches = useQuery({
+    queryKey: ["branches"],
+    enabled: isOwner,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("branches")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const fetchProfile = useCallback(async () => {
     if (!user) return;
@@ -95,6 +114,7 @@ function SettingsPage() {
     setLoadingUsers(true);
     const { data: profiles, error: profilesErr } = await supabase.from("profiles").select("*");
     const { data: roles } = await supabase.from("user_roles").select("user_id, role");
+    const { data: branchRows } = await supabase.from("branches").select("id, name");
     if (profilesErr) {
       toast.error("Gagal memuat daftar pengguna");
       setLoadingUsers(false);
@@ -107,9 +127,12 @@ function SettingsPage() {
           roleMap.set(r.user_id, r.role);
         }
       });
+      const branchMap = new Map<string, string>();
+      (branchRows ?? []).forEach((b) => branchMap.set(b.id, b.name));
       const merged: UserProfile[] = profiles.map((p) => ({
         ...p,
         role: roleMap.get(p.id) ?? "cashier",
+        branch_name: p.branch_id ? (branchMap.get(p.branch_id) ?? null) : null,
       }));
       setUsers(merged);
     }
@@ -173,11 +196,16 @@ function SettingsPage() {
     }
 
     if (data.user) {
+      // Set branch_id on the profile if selected
+      if (newBranchId) {
+        await supabase.from("profiles").update({ branch_id: newBranchId }).eq("id", data.user.id);
+      }
       toast.success(`Akun kasir ${newEmail.trim()} berhasil dibuat`);
       setShowAddCashier(false);
       setNewEmail("");
       setNewPassword("");
       setNewUsername("");
+      setNewBranchId("");
       fetchUsers();
     } else {
       toast.success("Akun dibuat. Kasir perlu konfirmasi email untuk bisa masuk.");
@@ -185,6 +213,7 @@ function SettingsPage() {
       setNewEmail("");
       setNewPassword("");
       setNewUsername("");
+      setNewBranchId("");
     }
     setAddingCashier(false);
   };
@@ -339,6 +368,11 @@ function SettingsPage() {
                           <Badge variant={u.role === "owner" ? "default" : "secondary"}>
                             {u.role === "owner" ? "Owner" : "Kasir"}
                           </Badge>
+                          {u.branch_name && (
+                            <Badge variant="outline" className="text-xs">
+                              {u.branch_name}
+                            </Badge>
+                          )}
                         </div>
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           {u.email ?? u.id.slice(0, 8)}
@@ -380,6 +414,15 @@ function SettingsPage() {
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Branch Management - Owner Only */}
+      {isOwner && (
+        <Card>
+          <CardContent className="pt-6">
+            <BranchManagement />
           </CardContent>
         </Card>
       )}
@@ -429,6 +472,24 @@ function SettingsPage() {
                 className="h-11"
               />
             </div>
+            {branches.data && branches.data.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="new-branch">Cabang (opsional)</Label>
+                <select
+                  id="new-branch"
+                  value={newBranchId}
+                  onChange={(e) => setNewBranchId(e.target.value)}
+                  className="flex h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                >
+                  <option value="">Tidak ada cabang</option>
+                  {branches.data.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setShowAddCashier(false)}>

@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 });
 
 function Dashboard() {
-  const { user, role, loading, username } = useAuth();
+  const { user, role, loading, username, branchId } = useAuth();
   const userId = user?.id;
   const isOwner = role === "owner";
 
@@ -45,7 +45,7 @@ function Dashboard() {
   if (loading) return <LoadingBlock />;
   if (isOwner) return <OwnerOverview username={username} />;
   if (shiftQuery.isLoading) return <LoadingBlock />;
-  if (!shiftQuery.data) return <OpenShiftPanel userId={userId} />;
+  if (!shiftQuery.data) return <OpenShiftPanel userId={userId} branchId={branchId} />;
   return <ActiveShiftPanel shiftId={shiftQuery.data.id} shift={shiftQuery.data} />;
 }
 
@@ -57,7 +57,13 @@ function LoadingBlock() {
   );
 }
 
-function OpenShiftPanel({ userId }: { userId?: string | undefined }) {
+function OpenShiftPanel({
+  userId,
+  branchId,
+}: {
+  userId?: string | undefined;
+  branchId?: string | null;
+}) {
   const queryClient = useQueryClient();
   const [initial, setInitial] = useState("");
 
@@ -91,6 +97,7 @@ function OpenShiftPanel({ userId }: { userId?: string | undefined }) {
         user_id: userId!,
         initial_physical_balance: Number(initial || 0),
         status: "open",
+        branch_id: branchId ?? null,
       });
       if (error) throw error;
     },

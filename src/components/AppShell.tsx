@@ -72,7 +72,7 @@ function OfflineBadge() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { username, role } = useAuth();
+  const { username, role, branchName } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -124,7 +124,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <OfflineBadge />
             <div className="text-right text-xs leading-tight">
               <div className="font-medium">{username ?? "—"}</div>
-              <div className="text-muted-foreground uppercase">{role ?? ""}</div>
+              <div className="text-muted-foreground">{branchName ?? role ?? ""}</div>
             </div>
             <Button size="sm" variant="secondary" onClick={signOut}>
               <LogOut className="size-4" />
@@ -142,7 +142,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
           <div className="flex items-center gap-2">
             <OfflineBadge />
-            <span className="text-xs text-muted-foreground">{username ?? "—"}</span>
+            <span className="text-xs text-muted-foreground">{branchName ?? username ?? "—"}</span>
             <Button size="sm" variant="ghost" onClick={signOut} className="h-8 w-8 p-0">
               <LogOut className="size-4" />
               <span className="sr-only">Keluar</span>

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,9 +25,24 @@ export const Route = createFileRoute("/_authenticated/reports")({
 function Reports() {
   const { role, user, loading } = useAuth();
   const isOwner = role === "owner";
+  const [branchFilter, setBranchFilter] = useState<string>("all");
+
+  const branches = useQuery({
+    queryKey: ["branches"],
+    enabled: isOwner,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("branches")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const shifts = useQuery({
-    queryKey: ["shift-reports", role, user?.id],
+    queryKey: ["shift-reports", role, user?.id, branchFilter],
     enabled: !!user?.id && !loading,
 
     queryFn: async () => {
@@ -37,6 +53,8 @@ function Reports() {
         .limit(60);
       if (!isOwner && user?.id) {
         query = query.eq("user_id", user.id);
+      } else if (isOwner && branchFilter !== "all") {
+        query = query.eq("branch_id", branchFilter);
       }
       const { data: shiftRows, error } = await query;
       if (error) throw error;
@@ -88,6 +106,20 @@ function Reports() {
           <ShieldCheck className="size-3.5 text-primary" />{" "}
           {loading ? "…" : isOwner ? "Owner" : "Kasir"}
         </span>
+        {isOwner && branches.data && branches.data.length > 0 && (
+          <select
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+            className="h-8 rounded-lg border border-border bg-secondary px-2 text-xs"
+          >
+            <option value="all">Semua Cabang</option>
+            {branches.data.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="responsive-grid-3">

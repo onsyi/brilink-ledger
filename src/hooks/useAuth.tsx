@@ -10,6 +10,8 @@ export type AuthState = {
   session: Session | null;
   role: AppRole | null;
   username: string | null;
+  branchId: string | null;
+  branchName: string | null;
 };
 
 export function useAuth(): AuthState {
@@ -19,6 +21,8 @@ export function useAuth(): AuthState {
     session: null,
     role: null,
     username: null,
+    branchId: null,
+    branchName: null,
   });
 
   useEffect(() => {
@@ -27,14 +31,37 @@ export function useAuth(): AuthState {
     const hydrate = async (session: Session | null) => {
       if (!session?.user) {
         if (active)
-          setState({ loading: false, user: null, session: null, role: null, username: null });
+          setState({
+            loading: false,
+            user: null,
+            session: null,
+            role: null,
+            username: null,
+            branchId: null,
+            branchName: null,
+          });
         return;
       }
       try {
         const [{ data: roleRows }, { data: profile }] = await Promise.all([
           supabase.from("user_roles").select("role").eq("user_id", session.user.id),
-          supabase.from("profiles").select("username").eq("id", session.user.id).maybeSingle(),
+          supabase
+            .from("profiles")
+            .select("username, branch_id")
+            .eq("id", session.user.id)
+            .maybeSingle(),
         ]);
+
+        let branchName: string | null = null;
+        if (profile?.branch_id) {
+          const { data: branch } = await supabase
+            .from("branches")
+            .select("name")
+            .eq("id", profile.branch_id)
+            .maybeSingle();
+          branchName = branch?.name ?? null;
+        }
+
         if (!active) return;
         const roles = (roleRows ?? []).map((r) => r.role as AppRole);
         setState({
@@ -43,16 +70,19 @@ export function useAuth(): AuthState {
           session,
           role: roles.includes("owner") ? "owner" : (roles[0] ?? "cashier"),
           username: profile?.username ?? session.user.email ?? null,
+          branchId: profile?.branch_id ?? null,
+          branchName,
         });
       } catch {
         if (!active) return;
-        // On network error, still set user but default to cashier to avoid privilege escalation
         setState({
           loading: false,
           user: session.user,
           session,
           role: "cashier",
           username: session.user.email ?? null,
+          branchId: null,
+          branchName: null,
         });
       }
     };
