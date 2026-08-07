@@ -320,6 +320,15 @@ export type Database = {
         };
         Returns: void;
       };
+      admin_create_user: {
+        Args: {
+          target_email: string;
+          target_password: string;
+          target_username?: string;
+          target_full_name?: string;
+        };
+        Returns: string;
+      };
       admin_update_user_email: {
         Args: {
           target_user_id: string;

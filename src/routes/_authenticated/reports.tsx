@@ -22,10 +22,31 @@ export const Route = createFileRoute("/_authenticated/reports")({
   component: Reports,
 });
 
+type Period = "today" | "week" | "month" | "all";
+
+function filterByPeriod(start: string, period: Period): boolean {
+  if (period === "all") return true;
+  const d = new Date(start);
+  const now = new Date();
+  if (period === "today") {
+    return d.toDateString() === now.toDateString();
+  }
+  if (period === "week") {
+    const weekAgo = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    return d >= weekAgo;
+  }
+  if (period === "month") {
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }
+  return true;
+}
+
 function Reports() {
   const { role, user, loading } = useAuth();
   const isOwner = role === "owner";
   const [branchFilter, setBranchFilter] = useState<string>("all");
+  const [periodFilter, setPeriodFilter] = useState<Period>("all");
 
   const branches = useQuery({
     queryKey: ["branches"],
@@ -42,7 +63,7 @@ function Reports() {
   });
 
   const shifts = useQuery({
-    queryKey: ["shift-reports", role, user?.id, branchFilter],
+    queryKey: ["shift-reports", role, user?.id, branchFilter, periodFilter],
     enabled: !!user?.id && !loading,
 
     queryFn: async () => {
@@ -86,7 +107,9 @@ function Reports() {
         arr.push(t);
         txnsByShift.set(t.shift_id, arr);
       });
-      return (shiftRows ?? []).map((s) => {
+        return (shiftRows ?? [])
+          .filter((s) => filterByPeriod(s.start_time, periodFilter))
+          .map((s) => {
         const own = txnsByShift.get(s.id) ?? [];
         const summary = summarize(own);
         const expected = expectedCash({
@@ -112,19 +135,7 @@ function Reports() {
   const totalDeposit = rows.reduce((s, r) => s + num(r.shift.deposit_amount), 0);
 
   const todayStats = useMemo(() => {
-    const today = new Date().toLocaleDateString("id-ID", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    const todayRows = rows.filter(
-      (r) =>
-        new Date(r.shift.start_time).toLocaleDateString("id-ID", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-        }) === today,
-    );
+    const todayRows = rows.filter((r) => filterByPeriod(r.shift.start_time, periodFilter));
     return {
       count: todayRows.length,
       profit: todayRows.reduce((s, r) => s + r.summary.profit, 0),
@@ -132,7 +143,16 @@ function Reports() {
       deposit: todayRows.reduce((s, r) => s + num(r.shift.deposit_amount), 0),
       open: todayRows.filter((r) => r.shift.status === "open").length,
     };
-  }, [rows]);
+  }, [rows, periodFilter]);
+
+  const periodLabel =
+    periodFilter === "today"
+      ? "Hari Ini"
+      : periodFilter === "week"
+        ? "7 Hari Terakhir"
+        : periodFilter === "month"
+          ? "Bulan Ini"
+          : "Semua Waktu";
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -165,6 +185,16 @@ function Reports() {
             ))}
           </select>
         )}
+        <select
+          value={periodFilter}
+          onChange={(e) => setPeriodFilter(e.target.value as Period)}
+          className="h-8 rounded-lg border border-border bg-secondary px-2 text-xs"
+        >
+          <option value="all">Semua Waktu</option>
+          <option value="today">Hari Ini</option>
+          <option value="week">7 Hari Terakhir</option>
+          <option value="month">Bulan Ini</option>
+        </select>
       </div>
 
       <div className="responsive-grid-3">
@@ -174,10 +204,10 @@ function Reports() {
 
       {rows.length > 0 && (
         <section className="ledger-card p-4 sm:p-5">
-          <h2 className="text-base font-semibold">Rekap Hari Ini</h2>
+          <h2 className="text-base font-semibold">Rekap {periodLabel}</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
-              <p className="text-xs text-muted-foreground">Shift hari ini</p>
+              <p className="text-xs text-muted-foreground">Shift</p>
               <p className="num mt-1 text-lg font-semibold">{todayStats.count}</p>
               {todayStats.open > 0 && (
                 <p className="text-xs text-warning">{todayStats.open} masih buka</p>

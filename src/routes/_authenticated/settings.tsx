@@ -191,20 +191,17 @@ function SettingsPage() {
       toast.error("Password minimal 6 karakter");
       return;
     }
-    // Simple email format check
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail.trim())) {
       toast.error("Format email tidak valid");
       return;
     }
     setAddingCashier(true);
 
-    const { data, error } = await supabase.auth.signUp({
-      email: newEmail.trim(),
-      password: newPassword,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: { username: newUsername.trim() },
-      },
+    const { data: newUserId, error } = await supabase.rpc("admin_create_user", {
+      target_email: newEmail.trim(),
+      target_password: newPassword,
+      target_username: newUsername.trim(),
+      target_full_name: newUsername.trim(),
     });
 
     if (error) {
@@ -213,41 +210,22 @@ function SettingsPage() {
       return;
     }
 
-    if (data.user) {
-      // Verify role was assigned by trigger, if not set it manually
-      const { data: roleCheck } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", data.user.id)
-        .maybeSingle();
-      if (!roleCheck) {
-        await supabase.from("user_roles").insert({ user_id: data.user.id, role: "cashier" });
+    if (newUserId && newBranchId) {
+      const { error: branchErr } = await supabase
+        .from("profiles")
+        .update({ branch_id: newBranchId })
+        .eq("id", newUserId);
+      if (branchErr) {
+        toast.warning("Akun dibuat, tapi gagal menetapkan cabang. Bisa diatur manual nanti.");
       }
-      // Set branch_id on the profile if selected
-      if (newBranchId) {
-        const { error: branchErr } = await supabase
-          .from("profiles")
-          .update({ branch_id: newBranchId })
-          .eq("id", data.user.id);
-        if (branchErr) {
-          toast.warning("Akun dibuat, tapi gagal menetapkan cabang. Bisa diatur manual nanti.");
-        }
-      }
-      toast.success(`Akun kasir ${newEmail.trim()} berhasil dibuat`);
-      setShowAddCashier(false);
-      setNewEmail("");
-      setNewPassword("");
-      setNewUsername("");
-      setNewBranchId("");
-      fetchUsers();
-    } else {
-      toast.success("Akun dibuat. Kasir perlu konfirmasi email untuk bisa masuk.");
-      setShowAddCashier(false);
-      setNewEmail("");
-      setNewPassword("");
-      setNewUsername("");
-      setNewBranchId("");
     }
+    toast.success(`Akun kasir ${newEmail.trim()} berhasil dibuat`);
+    setShowAddCashier(false);
+    setNewEmail("");
+    setNewPassword("");
+    setNewUsername("");
+    setNewBranchId("");
+    fetchUsers();
     setAddingCashier(false);
   };
 
