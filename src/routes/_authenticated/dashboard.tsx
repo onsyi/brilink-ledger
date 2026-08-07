@@ -108,9 +108,9 @@ function OpenShiftPanel({
       toast.success("Shift dibuka");
       queryClient.invalidateQueries({ queryKey: ["open-shift", userId] });
     },
-    onError: (e: Error) =>
+    onError: (e: Error & { code?: string }) =>
       toast.error(
-        e.message.includes("duplicate")
+        e.code === "23505" || e.message.includes("duplicate")
           ? "Masih ada shift aktif di akun ini. Tutup dulu shift tersebut."
           : e.message,
       ),

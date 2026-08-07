@@ -6,6 +6,7 @@ export type AppRole = "owner" | "cashier";
 
 export type AuthState = {
   loading: boolean;
+  error: string | null;
   user: User | null;
   session: Session | null;
   role: AppRole | null;
@@ -17,6 +18,7 @@ export type AuthState = {
 export function useAuth(): AuthState {
   const [state, setState] = useState<AuthState>({
     loading: true,
+    error: null,
     user: null,
     session: null,
     role: null,
@@ -33,6 +35,7 @@ export function useAuth(): AuthState {
         if (active)
           setState({
             loading: false,
+            error: null,
             user: null,
             session: null,
             role: null,
@@ -66,6 +69,7 @@ export function useAuth(): AuthState {
         const roles = (roleRows ?? []).map((r) => r.role as AppRole);
         setState({
           loading: false,
+          error: null,
           user: session.user,
           session,
           role: roles.includes("owner") ? "owner" : (roles[0] ?? "cashier"),
@@ -73,13 +77,15 @@ export function useAuth(): AuthState {
           branchId: profile?.branch_id ?? null,
           branchName,
         });
-      } catch {
+      } catch (err) {
         if (!active) return;
+        console.error("[useAuth] Failed to load profile:", err);
         setState({
           loading: false,
+          error: "Gagal memuat data akun. Silakan coba lagi.",
           user: session.user,
           session,
-          role: "cashier",
+          role: null,
           username: session.user.email ?? null,
           branchId: null,
           branchName: null,

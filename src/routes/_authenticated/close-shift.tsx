@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, ClipboardCheck, TriangleAlert, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -91,6 +91,7 @@ function CloseShift() {
   const [banks, setBanks] = useState<Record<string, string>>({});
   const [ppob, setPpob] = useState<Record<string, string>>({});
   const [showConfirm, setShowConfirm] = useState(false);
+  const submittingRef = useRef(false);
 
   const summary = useMemo(() => summarize(txns.data ?? []), [txns.data]);
   const pendingDebt = pendingReceivables.data ?? 0;
@@ -108,6 +109,8 @@ function CloseShift() {
 
   const close = useMutation({
     mutationFn: async () => {
+      if (submittingRef.current) throw new Error("Sedang diproses");
+      submittingRef.current = true;
       if (!shiftId) throw new Error("Tidak ada shift aktif");
       if (finalCash === "") throw new Error("Saldo fisik akhir wajib diisi");
       if (Number(finalCash) < 0) throw new Error("Saldo fisik akhir tidak boleh negatif");
@@ -152,7 +155,10 @@ function CloseShift() {
       queryClient.invalidateQueries({ queryKey: ["deposit-shifts"] });
       navigate({ to: "/reports" });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      submittingRef.current = false;
+      toast.error(e.message);
+    },
   });
 
   if (isOwner)

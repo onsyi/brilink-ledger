@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -111,6 +111,29 @@ function Reports() {
   const totalProfit = rows.reduce((s, r) => s + r.summary.profit, 0);
   const totalDeposit = rows.reduce((s, r) => s + num(r.shift.deposit_amount), 0);
 
+  const todayStats = useMemo(() => {
+    const today = new Date().toLocaleDateString("id-ID", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const todayRows = rows.filter(
+      (r) =>
+        new Date(r.shift.start_time).toLocaleDateString("id-ID", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }) === today,
+    );
+    return {
+      count: todayRows.length,
+      profit: todayRows.reduce((s, r) => s + r.summary.profit, 0),
+      txn: todayRows.reduce((s, r) => s + r.summary.count, 0),
+      deposit: todayRows.reduce((s, r) => s + num(r.shift.deposit_amount), 0),
+      open: todayRows.filter((r) => r.shift.status === "open").length,
+    };
+  }, [rows]);
+
   return (
     <div className="space-y-5 sm:space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -153,52 +176,29 @@ function Reports() {
         <section className="ledger-card p-4 sm:p-5">
           <h2 className="text-base font-semibold">Rekap Hari Ini</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {(() => {
-              const today = new Date().toLocaleDateString("id-ID", {
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-              });
-              const todayRows = rows.filter(
-                (r) =>
-                  new Date(r.shift.start_time).toLocaleDateString("id-ID", {
-                    year: "numeric",
-                    month: "2-digit",
-                    day: "2-digit",
-                  }) === today,
-              );
-              const todayProfit = todayRows.reduce((s, r) => s + r.summary.profit, 0);
-              const todayTxn = todayRows.reduce((s, r) => s + r.summary.count, 0);
-              const todayDeposit = todayRows.reduce((s, r) => s + num(r.shift.deposit_amount), 0);
-              const todayOpen = todayRows.filter((r) => r.shift.status === "open").length;
-              return (
-                <>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Shift hari ini</p>
-                    <p className="num mt-1 text-lg font-semibold">{todayRows.length}</p>
-                    {todayOpen > 0 && (
-                      <p className="text-xs text-warning">{todayOpen} masih buka</p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Transaksi</p>
-                    <p className="num mt-1 text-lg font-semibold">{todayTxn}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Laba hari ini</p>
-                    <p className="num mt-1 text-lg font-semibold text-success">
-                      {rupiah(todayProfit)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Setoran</p>
-                    <p className="num mt-1 text-lg font-semibold text-cash">
-                      {rupiah(todayDeposit)}
-                    </p>
-                  </div>
-                </>
-              );
-            })()}
+            <div>
+              <p className="text-xs text-muted-foreground">Shift hari ini</p>
+              <p className="num mt-1 text-lg font-semibold">{todayStats.count}</p>
+              {todayStats.open > 0 && (
+                <p className="text-xs text-warning">{todayStats.open} masih buka</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Transaksi</p>
+              <p className="num mt-1 text-lg font-semibold">{todayStats.txn}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Laba hari ini</p>
+              <p className="num mt-1 text-lg font-semibold text-success">
+                {rupiah(todayStats.profit)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Setoran</p>
+              <p className="num mt-1 text-lg font-semibold text-cash">
+                {rupiah(todayStats.deposit)}
+              </p>
+            </div>
           </div>
         </section>
       )}

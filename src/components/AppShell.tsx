@@ -18,7 +18,7 @@ import { useSessionTimeout } from "@/hooks/useSessionTimeout";
 import { SessionTimeoutDialog } from "@/components/SessionTimeoutDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getAllPending, isOnline } from "@/lib/offline-db";
+import { getAllPending, isOnline, clearPending } from "@/lib/offline-db";
 
 const nav = [
   { to: "/dashboard", label: "Shift", icon: LayoutDashboard, ownerLabel: "Ringkasan" },
@@ -101,7 +101,7 @@ function OfflineBadge() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { username, role, branchName } = useAuth();
+  const { username, role, branchName, error } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -119,6 +119,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await queryClient.cancelQueries();
     queryClient.clear();
+    clearPending();
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
   };
@@ -135,6 +136,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen pb-16 md:pb-0">
       <SessionTimeoutDialog open={showWarning} onExtend={extendSession} onLogout={handleTimeout} />
+      {error && (
+        <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-2 text-center text-sm text-destructive">
+          {error}
+        </div>
+      )}
       {/* Desktop header */}
       <header className="sticky top-0 z-20 hidden border-b border-border bg-background/85 backdrop-blur md:block">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3 lg:px-6">

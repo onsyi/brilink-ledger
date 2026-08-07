@@ -125,13 +125,18 @@ function SettingsPage() {
   const fetchUsers = useCallback(async () => {
     if (!isOwner) return;
     setLoadingUsers(true);
-    const { data: profiles, error: profilesErr } = await supabase.from("profiles").select("*");
-    const { data: roles } = await supabase.from("user_roles").select("user_id, role");
-    const { data: branchRows } = await supabase.from("branches").select("id, name");
+    const [{ data: profiles, error: profilesErr }, { data: roles }, { data: branchRows, error: branchErr }] = await Promise.all([
+      supabase.from("profiles").select("*"),
+      supabase.from("user_roles").select("user_id, role"),
+      supabase.from("branches").select("id, name"),
+    ]);
     if (profilesErr) {
       toast.error("Gagal memuat daftar pengguna");
       setLoadingUsers(false);
       return;
+    }
+    if (branchErr) {
+      console.warn("[Settings] Failed to load branches:", branchErr.message);
     }
     if (profiles && roles) {
       const roleMap = new Map<string, AppRole>();
