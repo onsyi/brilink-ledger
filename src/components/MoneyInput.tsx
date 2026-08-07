@@ -23,7 +23,10 @@ export function MoneyInput({ id, label, value, onChange, hint, required }: Props
         className="num"
         value={value}
         required={required}
-        onChange={(e) => onChange(e.target.value.replace(/[^0-9.]/g, ""))}
+        onChange={(e) => {
+          // Rupiah has no decimals — strip dots and non-numeric chars
+          onChange(e.target.value.replace(/[^0-9]/g, ""));
+        }}
         placeholder="0"
       />
       <p className="num text-[11px] text-muted-foreground">{hint ?? rupiah(Number(value || 0))}</p>

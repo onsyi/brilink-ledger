@@ -1,16 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import {
-  Loader2,
-  User,
-  Shield,
-  Users,
-  ArrowLeft,
-  Copy,
-  Check,
-  KeyRound,
-} from "lucide-react";
+import { Loader2, User, Shield, Users, ArrowLeft, Copy, Check, KeyRound } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, type AppRole } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -60,29 +51,29 @@ function SettingsPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // Add cashier dialog
   const [showAddCashier, setShowAddCashier] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newUsername, setNewUsername] = useState("");
   const [addingCashier, setAddingCashier] = useState(false);
 
-  // Reset password dialog
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [resetUserId, setResetUserId] = useState<string | null>(null);
+  const [resetUserEmail, setResetUserEmail] = useState("");
   const [resetUserName, setResetUserName] = useState("");
   const [newResetPassword, setNewResetPassword] = useState("");
   const [resettingPassword, setResettingPassword] = useState(false);
 
-  const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const fetchProfile = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
+    const { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+    if (error) {
+      toast.error("Gagal memuat profil");
+      setLoading(false);
+      return;
+    }
     if (data) {
       const p: UserProfile = {
         id: data.id,
@@ -102,8 +93,13 @@ function SettingsPage() {
   const fetchUsers = useCallback(async () => {
     if (!isOwner) return;
     setLoadingUsers(true);
-    const { data: profiles } = await supabase.from("profiles").select("*");
+    const { data: profiles, error: profilesErr } = await supabase.from("profiles").select("*");
     const { data: roles } = await supabase.from("user_roles").select("user_id, role");
+    if (profilesErr) {
+      toast.error("Gagal memuat daftar pengguna");
+      setLoadingUsers(false);
+      return;
+    }
     if (profiles && roles) {
       const roleMap = new Map<string, AppRole>();
       roles.forEach((r) => {
@@ -127,10 +123,14 @@ function SettingsPage() {
 
   const saveProfile = async () => {
     if (!user) return;
+    if (!username.trim()) {
+      toast.error("Username tidak boleh kosong");
+      return;
+    }
     setSaving(true);
     const { error } = await supabase
       .from("profiles")
-      .update({ full_name: fullName || null, username })
+      .update({ full_name: fullName.trim() || null, username: username.trim() })
       .eq("id", user.id);
     setSaving(false);
     if (error) {
@@ -142,22 +142,22 @@ function SettingsPage() {
   };
 
   const addCashier = async () => {
-    if (!newEmail || !newPassword || !newUsername) {
+    if (!newEmail.trim() || !newPassword || !newUsername.trim()) {
       toast.error("Semua field wajib diisi");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("Password minimal 6 karakter");
       return;
     }
     setAddingCashier(true);
 
-    // We need to use Supabase Admin API to create users.
-    // Since we only have anon key, we'll use a workaround:
-    // Insert profile + role directly, then prompt owner to create auth user via dashboard.
-    // But let's try signUp which works with anon key.
     const { data, error } = await supabase.auth.signUp({
-      email: newEmail,
+      email: newEmail.trim(),
       password: newPassword,
       options: {
         emailRedirectTo: window.location.origin,
-        data: { username: newUsername },
+        data: { username: newUsername.trim() },
       },
     });
 
@@ -168,20 +168,18 @@ function SettingsPage() {
     }
 
     if (data.user) {
-      // Update role to cashier (the trigger sets first user as owner, but we force cashier)
-      await supabase.from("user_roles").upsert(
-        { user_id: data.user.id, role: "cashier" },
-        { onConflict: "user_id,role" },
-      );
+      await supabase
+        .from("user_roles")
+        .upsert({ user_id: data.user.id, role: "cashier" }, { onConflict: "user_id,role" });
 
-      toast.success(`Akun kasir ${newEmail} berhasil dibuat`);
+      toast.success(`Akun kasir ${newEmail.trim()} berhasil dibuat`);
       setShowAddCashier(false);
       setNewEmail("");
       setNewPassword("");
       setNewUsername("");
       fetchUsers();
     } else {
-      toast.success("Akun dibuat. Menunggu konfirmasi email.");
+      toast.success("Akun dibuat. Kasir perlu konfirmasi email untuk bisa masuk.");
       setShowAddCashier(false);
       setNewEmail("");
       setNewPassword("");
@@ -191,30 +189,29 @@ function SettingsPage() {
   };
 
   const resetPassword = async () => {
-    if (!resetUserId || !newResetPassword) {
-      toast.error("Password baru wajib diisi");
+    if (!resetUserId || !resetUserEmail) {
+      toast.error("Data pengguna tidak lengkap");
+      return;
+    }
+    if (!newResetPassword || newResetPassword.length < 6) {
+      toast.error("Password baru minimal 6 karakter");
       return;
     }
     setResettingPassword(true);
 
-    // With anon key we cannot admin-update passwords.
-    // We'll send a password reset email instead.
-    // For a real implementation, this needs a Supabase Edge Function with service_role.
     const { error } = await supabase.auth.admin.updateUserById(resetUserId, {
       password: newResetPassword,
     });
 
     if (error) {
-      // Fallback: send reset email
-      toast.error("Tidak bisa reset langsung. Mengirim email reset...");
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-        profile?.email ?? "",
-        { redirectTo: window.location.origin },
-      );
+      // admin API requires service_role — fallback to reset email to the TARGET user
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(resetUserEmail, {
+        redirectTo: window.location.origin,
+      });
       if (resetError) {
-        toast.error(resetError.message);
+        toast.error("Gagal mengirim email reset. Hubungi admin.");
       } else {
-        toast.success("Email reset password terkirim");
+        toast.success(`Email reset password terkirim ke ${resetUserEmail}`);
       }
     } else {
       toast.success("Password berhasil direset");
@@ -224,10 +221,14 @@ function SettingsPage() {
     setResettingPassword(false);
   };
 
-  const copyEmail = (email: string) => {
-    navigator.clipboard.writeText(email);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyEmail = async (userId: string, email: string) => {
+    try {
+      await navigator.clipboard.writeText(email);
+      setCopiedId(userId);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      toast.error("Gagal menyalin email");
+    }
   };
 
   if (loading) {
@@ -361,10 +362,10 @@ function SettingsPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => copyEmail(u.email!)}
+                          onClick={() => copyEmail(u.id, u.email!)}
                           title="Salin email"
                         >
-                          {copied ? (
+                          {copiedId === u.id ? (
                             <Check className="size-4 text-success" />
                           ) : (
                             <Copy className="size-4" />
@@ -378,6 +379,7 @@ function SettingsPage() {
                           onClick={() => {
                             setResetUserId(u.id);
                             setResetUserName(u.username);
+                            setResetUserEmail(u.email ?? "");
                             setShowResetPassword(true);
                           }}
                         >

@@ -37,10 +37,6 @@ function CloseShift() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-
-
-
-
   const shiftQuery = useQuery({
     queryKey: ["open-shift", userId],
     enabled: !!userId,
@@ -62,7 +58,10 @@ function CloseShift() {
     queryKey: ["txns", shiftId],
     enabled: !!shiftId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("transactions").select("*").eq("shift_id", shiftId!);
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("shift_id", shiftId!);
       if (error) throw error;
       return data ?? [];
     },
@@ -131,7 +130,8 @@ function CloseShift() {
     },
     onSuccess: () => {
       toast.success("Shift ditutup dan terkunci");
-      queryClient.invalidateQueries();
+      queryClient.invalidateQueries({ queryKey: ["open-shift"] });
+      queryClient.invalidateQueries({ queryKey: ["deposit-shifts"] });
       navigate({ to: "/reports" });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -162,7 +162,6 @@ function CloseShift() {
         <Loader2 className="size-4 animate-spin" /> Memuat…
       </p>
     );
-
 
   if (!shiftQuery.data)
     return (
@@ -195,15 +194,21 @@ function CloseShift() {
       <div className="responsive-grid-3">
         <div className="ledger-card p-4">
           <p className="text-xs text-muted-foreground">Expected balance (sistem)</p>
-          <p className="num mt-2 text-base font-semibold text-cash sm:text-lg">{rupiah(expected)}</p>
+          <p className="num mt-2 text-base font-semibold text-cash sm:text-lg">
+            {rupiah(expected)}
+          </p>
         </div>
         <div className="ledger-card p-4">
           <p className="text-xs text-muted-foreground">Laba bersih shift</p>
-          <p className="num mt-2 text-base font-semibold text-success sm:text-lg">{rupiah(summary.profit)}</p>
+          <p className="num mt-2 text-base font-semibold text-success sm:text-lg">
+            {rupiah(summary.profit)}
+          </p>
         </div>
         <div className="ledger-card p-4">
           <p className="text-xs text-muted-foreground">Piutang belum lunas</p>
-          <p className="num mt-2 text-base font-semibold text-warning sm:text-lg">{rupiah(pendingDebt)}</p>
+          <p className="num mt-2 text-base font-semibold text-warning sm:text-lg">
+            {rupiah(pendingDebt)}
+          </p>
         </div>
       </div>
 
@@ -221,12 +226,7 @@ function CloseShift() {
           value={expenses}
           onChange={setExpenses}
         />
-        <MoneyInput
-          id="topup"
-          label="Permintaan top-up saldo"
-          value={topup}
-          onChange={setTopup}
-        />
+        <MoneyInput id="topup" label="Permintaan top-up saldo" value={topup} onChange={setTopup} />
         <MoneyInput id="deposit" label="Setoran ke owner" value={deposit} onChange={setDeposit} />
         <div className="space-y-1.5 sm:col-span-2 lg:col-span-4">
           <Label htmlFor="expense-notes" className="text-xs text-muted-foreground">
@@ -253,7 +253,8 @@ function CloseShift() {
           </p>
         ) : (
           <p className="flex items-center gap-2 rounded-lg border border-success/50 bg-success/10 px-3 py-2.5 text-xs sm:px-4 sm:py-3 sm:text-sm">
-            <CheckCircle2 className="size-4 shrink-0 text-success" /> Saldo fisik cocok dengan sistem.
+            <CheckCircle2 className="size-4 shrink-0 text-success" /> Saldo fisik cocok dengan
+            sistem.
           </p>
         ))}
       {depositMismatch && (
@@ -308,7 +309,8 @@ function CloseShift() {
             <ClipboardCheck className="mx-auto size-8 text-primary" />
             <h2 className="mt-4 text-lg font-semibold">Konfirmasi Tutup Shift</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Pastikan semua data sudah benar. Shift yang ditutup tidak dapat diubah kecuali oleh owner.
+              Pastikan semua data sudah benar. Shift yang ditutup tidak dapat diubah kecuali oleh
+              owner.
             </p>
             {variance !== 0 && (
               <p className="mt-2 text-sm font-medium text-destructive">
@@ -324,11 +326,7 @@ function CloseShift() {
               >
                 Batal
               </Button>
-              <Button
-                className="flex-1"
-                disabled={close.isPending}
-                onClick={() => close.mutate()}
-              >
+              <Button className="flex-1" disabled={close.isPending} onClick={() => close.mutate()}>
                 {close.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
                 Ya, Tutup Shift
               </Button>

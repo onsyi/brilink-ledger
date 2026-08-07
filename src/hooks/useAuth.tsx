@@ -30,19 +30,31 @@ export function useAuth(): AuthState {
           setState({ loading: false, user: null, session: null, role: null, username: null });
         return;
       }
-      const [{ data: roleRows }, { data: profile }] = await Promise.all([
-        supabase.from("user_roles").select("role").eq("user_id", session.user.id),
-        supabase.from("profiles").select("username").eq("id", session.user.id).maybeSingle(),
-      ]);
-      if (!active) return;
-      const roles = (roleRows ?? []).map((r) => r.role as AppRole);
-      setState({
-        loading: false,
-        user: session.user,
-        session,
-        role: roles.includes("owner") ? "owner" : (roles[0] ?? "cashier"),
-        username: profile?.username ?? session.user.email ?? null,
-      });
+      try {
+        const [{ data: roleRows }, { data: profile }] = await Promise.all([
+          supabase.from("user_roles").select("role").eq("user_id", session.user.id),
+          supabase.from("profiles").select("username").eq("id", session.user.id).maybeSingle(),
+        ]);
+        if (!active) return;
+        const roles = (roleRows ?? []).map((r) => r.role as AppRole);
+        setState({
+          loading: false,
+          user: session.user,
+          session,
+          role: roles.includes("owner") ? "owner" : (roles[0] ?? "cashier"),
+          username: profile?.username ?? session.user.email ?? null,
+        });
+      } catch {
+        if (!active) return;
+        // On network error, still set user but default to cashier to avoid privilege escalation
+        setState({
+          loading: false,
+          user: session.user,
+          session,
+          role: "cashier",
+          username: session.user.email ?? null,
+        });
+      }
     };
 
     supabase.auth.getSession().then(({ data }) => void hydrate(data.session));

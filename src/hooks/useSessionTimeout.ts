@@ -6,7 +6,10 @@ const WARNING_MS = 25 * 60 * 1000; // warning at 25 minutes
 export function useSessionTimeout(onTimeout: () => void) {
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const warningTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const onTimeoutRef = useRef(onTimeout);
   const [showWarning, setShowWarning] = useState(false);
+
+  onTimeoutRef.current = onTimeout;
 
   const resetTimer = useCallback(() => {
     setShowWarning(false);
@@ -18,19 +21,31 @@ export function useSessionTimeout(onTimeout: () => void) {
     }, WARNING_MS);
 
     timerRef.current = setTimeout(() => {
-      onTimeout();
+      onTimeoutRef.current();
     }, TIMEOUT_MS);
-  }, [onTimeout]);
+  }, []);
 
   useEffect(() => {
-    const events = ["mousedown", "keydown", "touchstart", "scroll"];
+    const events = ["mousedown", "keydown", "touchstart"] as const;
     const handler = () => resetTimer();
 
     events.forEach((e) => document.addEventListener(e, handler, { passive: true }));
     resetTimer();
 
+    // Pause timer when tab is hidden, resume when visible
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+      } else {
+        resetTimer();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
       events.forEach((e) => document.removeEventListener(e, handler));
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       if (timerRef.current) clearTimeout(timerRef.current);
       if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
     };

@@ -159,9 +159,6 @@ export function expectedCash(opts: {
   cashNet: number;
   pendingReceivables: number;
   expenses: number;
-  deposit?: number;
 }) {
-  return (
-    opts.initial + opts.cashNet - opts.pendingReceivables - opts.expenses - (opts.deposit ?? 0)
-  );
+  return opts.initial + opts.cashNet - opts.pendingReceivables - opts.expenses;
 }

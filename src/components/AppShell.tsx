@@ -2,7 +2,16 @@ import type { ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
-import { LayoutDashboard, ClipboardCheck, BarChart3, LogOut, Wallet, WifiOff, Loader2, Settings } from "lucide-react";
+import {
+  LayoutDashboard,
+  ClipboardCheck,
+  BarChart3,
+  LogOut,
+  Wallet,
+  WifiOff,
+  Loader2,
+  Settings,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSessionTimeout } from "@/hooks/useSessionTimeout";
@@ -53,11 +62,7 @@ function OfflineBadge() {
           : "border border-primary/50 bg-primary/10 text-primary",
       )}
     >
-      {!online ? (
-        <WifiOff className="size-3" />
-      ) : (
-        <Loader2 className="size-3 animate-spin" />
-      )}
+      {!online ? <WifiOff className="size-3" /> : <Loader2 className="size-3 animate-spin" />}
       {!online ? "Offline" : `Sync ${count}`}
     </span>
   );
@@ -90,11 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen pb-16 md:pb-0">
-      <SessionTimeoutDialog
-        open={showWarning}
-        onExtend={extendSession}
-        onLogout={handleTimeout}
-      />
+      <SessionTimeoutDialog open={showWarning} onExtend={extendSession} onLogout={handleTimeout} />
       {/* Desktop header */}
       <header className="sticky top-0 z-20 hidden border-b border-border bg-background/85 backdrop-blur md:block">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3 lg:px-6">
@@ -160,9 +161,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 to={item.to}
                 className={cn(
                   "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[10px] transition-colors",
-                  active
-                    ? "text-primary"
-                    : "text-muted-foreground active:bg-secondary",
+                  active ? "text-primary" : "text-muted-foreground active:bg-secondary",
                 )}
               >
                 <item.icon className="size-5" />

@@ -38,26 +38,42 @@ export function usePresets() {
     }
   }, []);
 
-  const addPreset = useCallback(
-    (p: Omit<TransactionPreset, "id">) => {
-      save([...presets, { ...p, id: generateId() }]);
-    },
-    [presets, save],
-  );
+  const addPreset = useCallback((p: Omit<TransactionPreset, "id">) => {
+    const entry = { ...p, id: generateId() };
+    setPresets((prev) => {
+      const next = [...prev, entry];
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // quota exceeded
+      }
+      return next;
+    });
+  }, []);
 
-  const removePreset = useCallback(
-    (id: string) => {
-      save(presets.filter((p) => p.id !== id));
-    },
-    [presets, save],
-  );
+  const removePreset = useCallback((id: string) => {
+    setPresets((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
 
-  const updatePreset = useCallback(
-    (id: string, updates: Partial<TransactionPreset>) => {
-      save(presets.map((p) => (p.id === id ? { ...p, ...updates } : p)));
-    },
-    [presets, save],
-  );
+  const updatePreset = useCallback((id: string, updates: Partial<TransactionPreset>) => {
+    setPresets((prev) => {
+      const next = prev.map((p) => (p.id === id ? { ...p, ...updates } : p));
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
 
   return { presets, addPreset, removePreset, updatePreset };
 }

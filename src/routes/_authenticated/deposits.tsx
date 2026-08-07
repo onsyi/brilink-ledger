@@ -55,7 +55,8 @@ function Deposits() {
       const { error } = await supabase
         .from("shifts")
         .update({ deposit_amount: 0 })
-        .eq("id", shiftId);
+        .eq("id", shiftId)
+        .not("deposit_amount", "eq", 0);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -85,7 +86,9 @@ function Deposits() {
       <div className="responsive-grid-2">
         <div className="ledger-card p-4">
           <p className="text-xs text-muted-foreground">Total setoran pending</p>
-          <p className="num mt-2 text-base font-semibold text-cash sm:text-lg">{rupiah(totalPending)}</p>
+          <p className="num mt-2 text-base font-semibold text-cash sm:text-lg">
+            {rupiah(totalPending)}
+          </p>
         </div>
         <div className="ledger-card p-4">
           <p className="text-xs text-muted-foreground">Jumlah setoran tercatat</p>
@@ -120,7 +123,7 @@ function Deposits() {
                   <tr key={s.id} className="border-t border-border">
                     <td className="py-3">
                       {isOwner
-                        ? (s.profiles as { username: string } | null)?.username ?? "—"
+                        ? ((s.profiles as { username: string } | null)?.username ?? "—")
                         : new Date(s.end_time ?? s.start_time).toLocaleDateString("id-ID")}
                     </td>
                     <td className="py-3 text-muted-foreground">
@@ -169,9 +172,7 @@ function Deposits() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Tutup shift</span>
                       <span>
-                        {s.end_time
-                          ? new Date(s.end_time).toLocaleDateString("id-ID")
-                          : "—"}
+                        {s.end_time ? new Date(s.end_time).toLocaleDateString("id-ID") : "—"}
                       </span>
                     </div>
                     <div className="flex justify-between">

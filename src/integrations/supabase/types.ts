@@ -152,7 +152,6 @@ export type Database = {
       }
       shifts: {
         Row: {
-          branch: string | null
           created_at: string
           deposit_amount: number
           end_time: string | null
@@ -167,7 +166,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          branch?: string | null
           created_at?: string
           deposit_amount?: number
           end_time?: string | null
@@ -182,7 +180,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          branch?: string | null
           created_at?: string
           deposit_amount?: number
           end_time?: string | null
