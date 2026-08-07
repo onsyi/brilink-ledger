@@ -4,8 +4,8 @@ const TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const WARNING_MS = 25 * 60 * 1000; // warning at 25 minutes
 
 export function useSessionTimeout(onTimeout: () => void) {
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
-  const warningTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const warningTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
   const onTimeoutRef = useRef(onTimeout);
   const [showWarning, setShowWarning] = useState(false);
 

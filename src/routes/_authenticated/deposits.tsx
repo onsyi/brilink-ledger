@@ -123,7 +123,7 @@ function Deposits() {
                   <tr key={s.id} className="border-t border-border">
                     <td className="py-3">
                       {isOwner
-                        ? ((s.profiles as { username: string } | null)?.username ?? "—")
+                        ? ((s.profiles as unknown as { username: string } | null)?.username ?? "—")
                         : new Date(s.end_time ?? s.start_time).toLocaleDateString("id-ID")}
                     </td>
                     <td className="py-3 text-muted-foreground">
@@ -164,7 +164,7 @@ function Deposits() {
                   {isOwner && (
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">
-                        {(s.profiles as { username: string } | null)?.username ?? "—"}
+                        {(s.profiles as unknown as { username: string } | null)?.username ?? "—"}
                       </span>
                     </div>
                   )}
