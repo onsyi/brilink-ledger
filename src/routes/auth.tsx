@@ -2,24 +2,18 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { Loader2, LockKeyhole, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff, Wallet, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const searchSchema = z.object({
-  mode: z.enum(["signin", "signup"]).catch("signin"),
-});
-
 const credsSchema = z.object({
   email: z.string().trim().email("Email tidak valid").max(255),
   password: z.string().min(6, "Password minimal 6 karakter").max(72),
-  username: z.string().trim().min(3, "Username minimal 3 karakter").max(40).optional(),
 });
 
 export const Route = createFileRoute("/auth")({
-  validateSearch: searchSchema,
   head: () => ({
     meta: [
       { title: "Masuk — Kasir BRILink" },
@@ -35,14 +29,10 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const { mode } = Route.useSearch();
   const navigate = useNavigate();
-  const [isSignup, setIsSignup] = useState(mode === "signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [username, setUsername] = useState("");
   const [busy, setBusy] = useState(false);
-  const [sentConfirm, setSentConfirm] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
@@ -53,97 +43,58 @@ function AuthPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const parsed = credsSchema.safeParse({
-      email,
-      password,
-      username: isSignup ? username : undefined,
-    });
+    const parsed = credsSchema.safeParse({ email, password });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "Input tidak valid");
       return;
     }
     setBusy(true);
     try {
-      if (isSignup) {
-        const { data, error } = await supabase.auth.signUp({
-          email: parsed.data.email,
-          password: parsed.data.password,
-          options: {
-            emailRedirectTo: window.location.origin,
-            data: { username: parsed.data.username },
-          },
-        });
-        if (error) throw error;
-        if (!data.session) {
-          setSentConfirm(true);
-          toast.success("Akun dibuat. Cek email untuk konfirmasi.");
-        } else {
-          navigate({ to: "/dashboard", replace: true });
-        }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: parsed.data.email,
-          password: parsed.data.password,
-        });
-        if (error) throw error;
-        navigate({ to: "/dashboard", replace: true });
-      }
+      const { error } = await supabase.auth.signInWithPassword({
+        email: parsed.data.email,
+        password: parsed.data.password,
+      });
+      if (error) throw error;
+      navigate({ to: "/dashboard", replace: true });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Gagal memproses permintaan");
+      toast.error(err instanceof Error ? err.message : "Gagal masuk");
     } finally {
       setBusy(false);
     }
   };
 
-  const google = async () => {
-    setBusy(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin,
-      },
-    });
-    if (error) {
-      setBusy(false);
-      toast.error("Gagal masuk dengan Google");
-      return;
-    }
-  };
-
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-10 sm:px-5 sm:py-12">
-      <div className="ledger-card w-full max-w-md p-5 sm:p-7">
-        <Link to="/" className="text-xs text-muted-foreground hover:text-foreground">
-          ← Kasir BRILink
-        </Link>
-        <h1 className="mt-4 flex items-center gap-2 text-xl font-semibold sm:text-2xl">
-          <LockKeyhole className="size-5 text-primary" />
-          {isSignup ? "Buat akun" : "Masuk"}
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Akun pertama yang mendaftar otomatis menjadi Owner. Akun berikutnya menjadi Kasir.
-        </p>
-
-        {sentConfirm ? (
-          <p className="mt-6 rounded-lg border border-border bg-secondary/50 p-4 text-sm">
-            Konfirmasi terkirim ke <span className="font-medium">{email}</span>. Klik tautan di email
-            tersebut, lalu masuk kembali.
+    <div className="flex min-h-screen">
+      {/* Left panel - Branding */}
+      <div className="hidden w-1/2 flex-col items-center justify-center bg-gradient-to-br from-[oklch(0.25_0.04_232)] via-[oklch(0.22_0.035_234)] to-[oklch(0.19_0.03_236)] p-8 lg:flex xl:p-12">
+        <div className="text-center">
+          <div className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-primary/20">
+            <Wallet className="size-8 text-primary" />
+          </div>
+          <h1 className="mt-6 font-display text-3xl font-bold xl:text-4xl">Kasir BRILink</h1>
+          <p className="mt-3 text-sm text-muted-foreground xl:text-base">
+            Aplikasi buatan <span className="font-semibold text-foreground">Onsyi.devpalu</span>
           </p>
-        ) : (
-          <form onSubmit={submit} className="mt-5 space-y-3 sm:mt-6 sm:space-y-4">
-            {isSignup && (
-              <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="kasir_pagi"
-                  maxLength={40}
-                  autoComplete="username"
-                />
-              </div>
-            )}
+        </div>
+      </div>
+
+      {/* Right panel - Form */}
+      <div className="flex w-full items-center justify-center px-5 py-10 sm:px-8 lg:w-1/2">
+        <div className="w-full max-w-sm">
+          {/* Mobile logo */}
+          <Link to="/" className="mb-8 inline-flex items-center gap-2 lg:hidden">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-primary/20">
+              <Wallet className="size-5 text-primary" />
+            </div>
+            <span className="font-display text-lg font-bold tracking-tight">Kasir BRILink</span>
+          </Link>
+
+          <h2 className="font-display text-2xl font-bold sm:text-3xl">Selamat datang kembali</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Masuk untuk mengelola shift dan transaksi Anda.
+          </p>
+
+          <form onSubmit={submit} className="mt-6 space-y-4 sm:mt-8">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -155,6 +106,7 @@ function AuthPage() {
                 maxLength={255}
                 autoComplete="email"
                 required
+                className="h-11"
               />
             </div>
             <div className="space-y-2">
@@ -167,8 +119,8 @@ function AuthPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Minimal 6 karakter"
                   maxLength={72}
-                  autoComplete={isSignup ? "new-password" : "current-password"}
-                  className="pr-10"
+                  autoComplete="current-password"
+                  className="h-11 pr-10"
                   required
                 />
                 <button
@@ -181,31 +133,14 @@ function AuthPage() {
                 </button>
               </div>
             </div>
-            <Button type="submit" className="w-full" disabled={busy}>
+            <Button type="submit" className="h-11 w-full" disabled={busy}>
               {busy && <Loader2 className="mr-2 size-4 animate-spin" />}
-              {isSignup ? "Daftar" : "Masuk"}
+              Masuk
+              {!busy && <ArrowRight className="ml-1 size-4" />}
             </Button>
           </form>
-        )}
-
-        <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground sm:my-5">
-          <span className="h-px flex-1 bg-border" /> atau <span className="h-px flex-1 bg-border" />
         </div>
-        <Button variant="secondary" className="w-full" onClick={google} disabled={busy}>
-          Lanjut dengan Google
-        </Button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setSentConfirm(false);
-            setIsSignup((v) => !v);
-          }}
-          className="mt-5 w-full text-center text-sm text-muted-foreground hover:text-foreground sm:mt-6"
-        >
-          {isSignup ? "Sudah punya akun? Masuk" : "Belum punya akun? Daftar"}
-        </button>
       </div>
-    </main>
+    </div>
   );
 }

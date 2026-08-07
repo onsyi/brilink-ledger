@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
-import { LayoutDashboard, ClipboardCheck, BarChart3, LogOut, Wallet, WifiOff, Loader2 } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, BarChart3, LogOut, Wallet, WifiOff, Loader2, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSessionTimeout } from "@/hooks/useSessionTimeout";
@@ -16,6 +16,7 @@ const nav = [
   { to: "/close-shift", label: "Tutup Shift", icon: ClipboardCheck, cashierOnly: true },
   { to: "/deposits", label: "Setoran", icon: Wallet },
   { to: "/reports", label: "Laporan", icon: BarChart3, ownerOnly: true },
+  { to: "/settings", label: "Pengaturan", icon: Settings },
 ] as const;
 
 function OfflineBadge() {
