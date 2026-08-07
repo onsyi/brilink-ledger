@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   LayoutDashboard,
   ClipboardCheck,
@@ -31,6 +31,8 @@ const nav = [
 function OfflineBadge() {
   const [count, setCount] = useState(0);
   const [online, setOnline] = useState(isOnline());
+  const countRef = useRef(0);
+  countRef.current = count;
 
   useEffect(() => {
     let active = true;
@@ -41,14 +43,41 @@ function OfflineBadge() {
       if (active) setCount(pending.length);
     };
     check();
-    const interval = setInterval(check, 10000);
-    const onOnline = () => check();
-    const onOffline = () => check();
+
+    // Only poll when offline or when there are pending items
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const startPolling = () => {
+      if (interval) return;
+      interval = setInterval(async () => {
+        const p = await getAllPending();
+        if (!active) return;
+        setCount(p.length);
+        setOnline(isOnline());
+        // Stop polling once back online and no pending items
+        if (isOnline() && p.length === 0 && interval) {
+          clearInterval(interval);
+          interval = null;
+        }
+      }, 10000);
+    };
+
+    const onOnline = () => {
+      check();
+      startPolling();
+    };
+    const onOffline = () => {
+      check();
+      startPolling();
+    };
+
+    // Start polling immediately if offline or has pending
+    if (!isOnline() || countRef.current > 0) startPolling();
+
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     return () => {
       active = false;
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
     };
@@ -77,11 +106,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isOwner = role === "owner";
-  const items = nav.filter((item) => {
-    if ("cashierOnly" in item && item.cashierOnly && isOwner) return false;
-    if ("ownerOnly" in item && item.ownerOnly && !isOwner) return false;
-    return true;
-  });
+  const items = useMemo(
+    () =>
+      nav.filter((item) => {
+        if ("cashierOnly" in item && item.cashierOnly && isOwner) return false;
+        if ("ownerOnly" in item && item.ownerOnly && !isOwner) return false;
+        return true;
+      }),
+    [isOwner],
+  );
 
   const signOut = async () => {
     await queryClient.cancelQueries();
@@ -90,8 +123,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     navigate({ to: "/auth", replace: true });
   };
 
+  const signOutRef = useRef(signOut);
+  signOutRef.current = signOut;
+
   const handleTimeout = useCallback(() => {
-    signOut();
+    signOutRef.current();
   }, []);
 
   const { showWarning, extendSession } = useSessionTimeout(handleTimeout);

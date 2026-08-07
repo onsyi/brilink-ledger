@@ -7,16 +7,21 @@ export function useSessionTimeout(onTimeout: () => void) {
   const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
   const warningTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
   const onTimeoutRef = useRef(onTimeout);
+  const warningRef = useRef(false);
   const [showWarning, setShowWarning] = useState(false);
 
   onTimeoutRef.current = onTimeout;
 
   const resetTimer = useCallback(() => {
-    setShowWarning(false);
+    if (warningRef.current) {
+      warningRef.current = false;
+      setShowWarning(false);
+    }
     if (timerRef.current) clearTimeout(timerRef.current);
     if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
 
     warningTimerRef.current = setTimeout(() => {
+      warningRef.current = true;
       setShowWarning(true);
     }, WARNING_MS);
 
@@ -32,7 +37,6 @@ export function useSessionTimeout(onTimeout: () => void) {
     events.forEach((e) => document.addEventListener(e, handler, { passive: true }));
     resetTimer();
 
-    // Pause timer when tab is hidden, resume when visible
     const onVisibilityChange = () => {
       if (document.hidden) {
         if (timerRef.current) clearTimeout(timerRef.current);

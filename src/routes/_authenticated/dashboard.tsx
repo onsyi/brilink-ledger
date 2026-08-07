@@ -73,21 +73,24 @@ function OpenShiftPanel({
     queryFn: async () => {
       const { data: shift } = await supabase
         .from("shifts")
-        .select("id, end_time, final_physical_balance")
+        .select(
+          "id, end_time, final_physical_balance, bank_balances(bank_name, final_amount), ppob_balances(provider_name, final_amount)",
+        )
         .eq("user_id", userId!)
         .eq("status", "closed")
         .order("end_time", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (!shift) return null;
-      const [{ data: banks }, { data: ppob }] = await Promise.all([
-        supabase.from("bank_balances").select("bank_name, final_amount").eq("shift_id", shift.id),
-        supabase
-          .from("ppob_balances")
-          .select("provider_name, final_amount")
-          .eq("shift_id", shift.id),
-      ]);
-      return { shift, banks: banks ?? [], ppob: ppob ?? [] };
+      return {
+        shift: {
+          id: shift.id,
+          end_time: shift.end_time,
+          final_physical_balance: shift.final_physical_balance,
+        },
+        banks: (shift["bank_balances"] ?? []) as { bank_name: string; final_amount: number }[],
+        ppob: (shift["ppob_balances"] ?? []) as { provider_name: string; final_amount: number }[],
+      };
     },
   });
 
@@ -219,7 +222,9 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
-        .select("*")
+        .select(
+          "id, transaction_type, source_account, destination_account, principal_amount, customer_fee, provider_cost, profit_net, created_at",
+        )
         .eq("shift_id", shiftId)
         .order("created_at", { ascending: false });
       if (error) throw error;

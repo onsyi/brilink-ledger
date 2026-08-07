@@ -48,7 +48,9 @@ function Reports() {
     queryFn: async () => {
       let query = supabase
         .from("shifts")
-        .select("*")
+        .select(
+          "id, user_id, start_time, initial_physical_balance, total_expenses, expense_notes, final_physical_balance, deposit_amount, topup_request, status, branch_id",
+        )
         .order("start_time", { ascending: false })
         .limit(60);
       if (!isOwner && user?.id) {
@@ -61,7 +63,12 @@ function Reports() {
       const ids = (shiftRows ?? []).map((s) => s.id);
       if (ids.length === 0) return [];
       const [{ data: txns }, { data: profiles }, { data: receivables }] = await Promise.all([
-        supabase.from("transactions").select("*").in("shift_id", ids),
+        supabase
+          .from("transactions")
+          .select(
+            "shift_id, transaction_type, source_account, destination_account, principal_amount, customer_fee, provider_cost, profit_net",
+          )
+          .in("shift_id", ids),
         supabase.from("profiles").select("id, username"),
         supabase
           .from("receivables")
@@ -73,8 +80,14 @@ function Reports() {
       (receivables ?? []).forEach((r) => {
         debtByShift.set(r.shift_id, (debtByShift.get(r.shift_id) ?? 0) + num(r.debt_amount));
       });
+      const txnsByShift = new Map<string, typeof txns>();
+      (txns ?? []).forEach((t) => {
+        const arr = txnsByShift.get(t.shift_id) ?? [];
+        arr.push(t);
+        txnsByShift.set(t.shift_id, arr);
+      });
       return (shiftRows ?? []).map((s) => {
-        const own = (txns ?? []).filter((t) => t.shift_id === s.id);
+        const own = txnsByShift.get(s.id) ?? [];
         const summary = summarize(own);
         const expected = expectedCash({
           initial: num(s.initial_physical_balance),
