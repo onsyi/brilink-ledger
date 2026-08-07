@@ -207,10 +207,23 @@ function Deposits() {
       </section>
 
       {confirmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="deposit-confirm-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmId(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setConfirmId(null);
+          }}
+        >
           <div className="ledger-card w-full max-w-sm p-6 text-center">
             <CheckCircle2 className="mx-auto size-8 text-primary" />
-            <h2 className="mt-4 text-lg font-semibold">Konfirmasi Setoran</h2>
+            <h2 id="deposit-confirm-title" className="mt-4 text-lg font-semibold">
+              Konfirmasi Setoran
+            </h2>
             <p className="mt-2 text-sm text-muted-foreground">
               Anda yakin telah menerima setoran tunai sebesar{" "}
               <span className="font-semibold text-cash">{rupiah(confirmAmount)}</span> dari kasir?

@@ -320,10 +320,23 @@ function CloseShift() {
       </Button>
 
       {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="close-shift-confirm-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowConfirm(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setShowConfirm(false);
+          }}
+        >
           <div className="ledger-card w-full max-w-md p-6 text-center">
             <ClipboardCheck className="mx-auto size-8 text-primary" />
-            <h2 className="mt-4 text-lg font-semibold">Konfirmasi Tutup Shift</h2>
+            <h2 id="close-shift-confirm-title" className="mt-4 text-lg font-semibold">
+              Konfirmasi Tutup Shift
+            </h2>
             <p className="mt-2 text-sm text-muted-foreground">
               Pastikan semua data sudah benar. Shift yang ditutup tidak dapat diubah kecuali oleh
               owner.

@@ -60,17 +60,26 @@ function Reports() {
       if (error) throw error;
       const ids = (shiftRows ?? []).map((s) => s.id);
       if (ids.length === 0) return [];
-      const [{ data: txns }, { data: profiles }] = await Promise.all([
+      const [{ data: txns }, { data: profiles }, { data: receivables }] = await Promise.all([
         supabase.from("transactions").select("*").in("shift_id", ids),
         supabase.from("profiles").select("id, username"),
+        supabase
+          .from("receivables")
+          .select("shift_id, debt_amount")
+          .eq("status", "pending")
+          .in("shift_id", ids),
       ]);
+      const debtByShift = new Map<string, number>();
+      (receivables ?? []).forEach((r) => {
+        debtByShift.set(r.shift_id, (debtByShift.get(r.shift_id) ?? 0) + num(r.debt_amount));
+      });
       return (shiftRows ?? []).map((s) => {
         const own = (txns ?? []).filter((t) => t.shift_id === s.id);
         const summary = summarize(own);
         const expected = expectedCash({
           initial: num(s.initial_physical_balance),
           cashNet: summary.cashNet,
-          pendingReceivables: 0,
+          pendingReceivables: debtByShift.get(s.id) ?? 0,
           expenses: num(s.total_expenses),
         });
         return {

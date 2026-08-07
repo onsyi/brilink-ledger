@@ -18,51 +18,6 @@ export const PPOB_PROVIDERS = [
   "I-Simpel",
 ] as const;
 
-export const ACCOUNTS = [
-  { value: "kas_fisik", label: "Saldo Fisik (Kas)" },
-  { value: "saldo_bank", label: "Saldo Digital (Bank/EDC)" },
-  { value: "saldo_ppob", label: "Saldo PPOB" },
-] as const;
-
-export type TxnType = "tarik_tunai" | "setor_tunai" | "transfer" | "ppob";
-
-export const TXN_TYPES: {
-  value: TxnType;
-  label: string;
-  source: string;
-  destination: string;
-  hint: string;
-}[] = [
-  {
-    value: "tarik_tunai",
-    label: "Tarik Tunai",
-    source: "kas_fisik",
-    destination: "saldo_bank",
-    hint: "Kas fisik (-), saldo digital (+)",
-  },
-  {
-    value: "setor_tunai",
-    label: "Setor Tunai",
-    source: "saldo_bank",
-    destination: "kas_fisik",
-    hint: "Saldo digital (-), kas fisik (+)",
-  },
-  {
-    value: "transfer",
-    label: "Transfer",
-    source: "kas_fisik",
-    destination: "saldo_bank",
-    hint: "Kas fisik (+ dari pelanggan), saldo digital (-)",
-  },
-  {
-    value: "ppob",
-    label: "PPOB / Tagihan",
-    source: "kas_fisik",
-    destination: "saldo_ppob",
-    hint: "Kas fisik (+ dari pelanggan), saldo PPOB (-)",
-  },
-];
-
 export const rupiah = (value: number | string | null | undefined) =>
   new Intl.NumberFormat("id-ID", {
     style: "currency",

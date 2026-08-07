@@ -227,12 +227,25 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
     },
   });
 
+  const pendingReceivables = useQuery({
+    queryKey: ["pending-receivables", shiftId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("receivables")
+        .select("debt_amount")
+        .eq("shift_id", shiftId)
+        .eq("status", "pending");
+      if (error) throw error;
+      return (data ?? []).reduce((sum, r) => sum + num(r.debt_amount), 0);
+    },
+  });
+
   const summary = summarize(txns.data ?? []);
 
   const expected = expectedCash({
     initial: num(shift.initial_physical_balance),
     cashNet: summary.cashNet,
-    pendingReceivables: 0,
+    pendingReceivables: pendingReceivables.data ?? 0,
     expenses: num(shift.total_expenses),
   });
 
