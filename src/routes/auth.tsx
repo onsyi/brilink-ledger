@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Loader2, Eye, EyeOff, Wallet, ArrowRight } from "lucide-react";
@@ -36,18 +36,26 @@ function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
+    let active = true;
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard", replace: true });
+      if (active && data.session) navigate({ to: "/dashboard", replace: true });
     });
+    return () => {
+      active = false;
+    };
   }, [navigate]);
+
+  const submittingRef = useRef(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
     const parsed = credsSchema.safeParse({ email, password });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "Input tidak valid");
       return;
     }
+    submittingRef.current = true;
     setBusy(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -59,6 +67,7 @@ function AuthPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal masuk");
     } finally {
+      submittingRef.current = false;
       setBusy(false);
     }
   };
