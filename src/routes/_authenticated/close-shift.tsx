@@ -67,6 +67,20 @@ function CloseShift() {
     },
   });
 
+  const pendingReceivables = useQuery({
+    queryKey: ["pending-receivables", shiftId],
+    enabled: !!shiftId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("receivables")
+        .select("debt_amount")
+        .eq("shift_id", shiftId!)
+        .eq("status", "pending");
+      if (error) throw error;
+      return (data ?? []).reduce((sum, r) => sum + num(r.debt_amount), 0);
+    },
+  });
+
   const [finalCash, setFinalCash] = useState("");
   const [expenses, setExpenses] = useState("");
   const [expenseNotes, setExpenseNotes] = useState("");
@@ -77,7 +91,7 @@ function CloseShift() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   const summary = useMemo(() => summarize(txns.data ?? []), [txns.data]);
-  const pendingDebt = 0;
+  const pendingDebt = pendingReceivables.data ?? 0;
 
   const expected = shiftQuery.data
     ? expectedCash({
@@ -94,7 +108,9 @@ function CloseShift() {
     mutationFn: async () => {
       if (!shiftId) throw new Error("Tidak ada shift aktif");
       if (finalCash === "") throw new Error("Saldo fisik akhir wajib diisi");
+      if (Number(finalCash) < 0) throw new Error("Saldo fisik akhir tidak boleh negatif");
       if (depositMismatch) throw new Error("Setoran tidak boleh melebihi saldo fisik akhir");
+      if (Number(deposit || 0) < 0) throw new Error("Setoran tidak boleh negatif");
 
       const bankRows = BANKS.map((b) => ({
         shift_id: shiftId,

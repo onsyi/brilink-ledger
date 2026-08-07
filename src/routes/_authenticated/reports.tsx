@@ -30,11 +30,15 @@ function Reports() {
     enabled: !!user?.id && !loading,
 
     queryFn: async () => {
-      const { data: shiftRows, error } = await supabase
+      let query = supabase
         .from("shifts")
         .select("*")
         .order("start_time", { ascending: false })
         .limit(60);
+      if (!isOwner && user?.id) {
+        query = query.eq("user_id", user.id);
+      }
+      const { data: shiftRows, error } = await query;
       if (error) throw error;
       const ids = (shiftRows ?? []).map((s) => s.id);
       if (ids.length === 0) return [];
