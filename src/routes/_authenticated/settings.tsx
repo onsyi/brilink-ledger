@@ -71,6 +71,10 @@ function SettingsPage() {
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  const [editBranchUser, setEditBranchUser] = useState<UserProfile | null>(null);
+  const [editBranchId, setEditBranchId] = useState<string>("");
+  const [savingBranch, setSavingBranch] = useState(false);
+
   const branches = useQuery({
     queryKey: ["branches"],
     enabled: isOwner,
@@ -254,6 +258,23 @@ function SettingsPage() {
     }
   };
 
+  const saveBranchAssignment = async () => {
+    if (!editBranchUser) return;
+    setSavingBranch(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ branch_id: editBranchId || null })
+      .eq("id", editBranchUser.id);
+    setSavingBranch(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`Cabang ${editBranchUser.username} berhasil diubah`);
+      setEditBranchUser(null);
+      fetchUsers();
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -403,6 +424,19 @@ function SettingsPage() {
                       {u.role !== "owner" && (
                         <Button
                           size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setEditBranchUser(u);
+                            setEditBranchId(u.branch_id ?? "");
+                          }}
+                          title="Ubah cabang"
+                        >
+                          {u.branch_name ? u.branch_name : "Atur Cabang"}
+                        </Button>
+                      )}
+                      {u.role !== "owner" && (
+                        <Button
+                          size="sm"
                           variant="outline"
                           onClick={() => {
                             setResetUserId(u.id);
@@ -527,6 +561,45 @@ function SettingsPage() {
             <Button onClick={resetPassword} disabled={resettingPassword}>
               {resettingPassword && <Loader2 className="mr-2 size-4 animate-spin" />}
               Kirim Email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Branch Dialog */}
+      <Dialog open={!!editBranchUser} onOpenChange={() => setEditBranchUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ubah Cabang</DialogTitle>
+            <DialogDescription>
+              Tetapkan cabang untuk <span className="font-medium">{editBranchUser?.username}</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="edit-branch">Cabang</Label>
+              <select
+                id="edit-branch"
+                value={editBranchId}
+                onChange={(e) => setEditBranchId(e.target.value)}
+                className="flex h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+              >
+                <option value="">Tidak ada cabang</option>
+                {branches.data?.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setEditBranchUser(null)}>
+              Batal
+            </Button>
+            <Button onClick={saveBranchAssignment} disabled={savingBranch}>
+              {savingBranch && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Simpan
             </Button>
           </DialogFooter>
         </DialogContent>
