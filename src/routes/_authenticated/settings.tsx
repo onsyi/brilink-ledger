@@ -198,7 +198,13 @@ function SettingsPage() {
     if (data.user) {
       // Set branch_id on the profile if selected
       if (newBranchId) {
-        await supabase.from("profiles").update({ branch_id: newBranchId }).eq("id", data.user.id);
+        const { error: branchErr } = await supabase
+          .from("profiles")
+          .update({ branch_id: newBranchId })
+          .eq("id", data.user.id);
+        if (branchErr) {
+          toast.warning("Akun dibuat, tapi gagal menetapkan cabang. Bisa diatur manual nanti.");
+        }
       }
       toast.success(`Akun kasir ${newEmail.trim()} berhasil dibuat`);
       setShowAddCashier(false);
