@@ -75,6 +75,11 @@ function SettingsPage() {
   const [editBranchId, setEditBranchId] = useState<string>("");
   const [savingBranch, setSavingBranch] = useState(false);
 
+  const [editCashier, setEditCashier] = useState<UserProfile | null>(null);
+  const [editUsername, setEditUsername] = useState("");
+  const [editFullName, setEditFullName] = useState("");
+  const [savingCashier, setSavingCashier] = useState(false);
+
   const branches = useQuery({
     queryKey: ["branches"],
     enabled: isOwner,
@@ -275,6 +280,30 @@ function SettingsPage() {
     }
   };
 
+  const saveCashierProfile = async () => {
+    if (!editCashier) return;
+    if (!editUsername.trim()) {
+      toast.error("Username tidak boleh kosong");
+      return;
+    }
+    setSavingCashier(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        username: editUsername.trim(),
+        full_name: editFullName.trim() || null,
+      })
+      .eq("id", editCashier.id);
+    setSavingCashier(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`Profil ${editCashier.username} berhasil diubah`);
+      setEditCashier(null);
+      fetchUsers();
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -426,6 +455,20 @@ function SettingsPage() {
                           size="sm"
                           variant="ghost"
                           onClick={() => {
+                            setEditCashier(u);
+                            setEditUsername(u.username);
+                            setEditFullName(u.full_name ?? "");
+                          }}
+                          title="Edit profil"
+                        >
+                          Edit
+                        </Button>
+                      )}
+                      {u.role !== "owner" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
                             setEditBranchUser(u);
                             setEditBranchId(u.branch_id ?? "");
                           }}
@@ -561,6 +604,63 @@ function SettingsPage() {
             <Button onClick={resetPassword} disabled={resettingPassword}>
               {resettingPassword && <Loader2 className="mr-2 size-4 animate-spin" />}
               Kirim Email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Cashier Dialog */}
+      <Dialog open={!!editCashier} onOpenChange={() => setEditCashier(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Kasir</DialogTitle>
+            <DialogDescription>
+              Ubah informasi akun kasir. Email tidak dapat diubah dari sini.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="edit-cashier-email">Email</Label>
+              <Input
+                id="edit-cashier-email"
+                value={editCashier?.email ?? ""}
+                disabled
+                className="h-11 bg-muted"
+              />
+              <p className="text-xs text-muted-foreground">
+                Email hanya bisa diubah oleh Supabase Admin.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-cashier-username">Username</Label>
+              <Input
+                id="edit-cashier-username"
+                value={editUsername}
+                onChange={(e) => setEditUsername(e.target.value)}
+                placeholder="username"
+                maxLength={40}
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-cashier-fullname">Nama Lengkap</Label>
+              <Input
+                id="edit-cashier-fullname"
+                value={editFullName}
+                onChange={(e) => setEditFullName(e.target.value)}
+                placeholder="Nama lengkap (opsional)"
+                maxLength={100}
+                className="h-11"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setEditCashier(null)}>
+              Batal
+            </Button>
+            <Button onClick={saveCashierProfile} disabled={savingCashier}>
+              {savingCashier && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Simpan
             </Button>
           </DialogFooter>
         </DialogContent>
