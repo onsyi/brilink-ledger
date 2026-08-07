@@ -24,8 +24,10 @@ export function MoneyInput({ id, label, value, onChange, hint, required }: Props
         value={value}
         required={required}
         onChange={(e) => {
-          // Rupiah has no decimals — strip dots and non-numeric chars
-          onChange(e.target.value.replace(/[^0-9]/g, ""));
+          const raw = e.target.value.replace(/[^0-9]/g, "");
+          // Prevent leading zeros (except single "0")
+          const cleaned = raw.length > 1 ? raw.replace(/^0+/, "") : raw;
+          onChange(cleaned);
         }}
         placeholder="0"
       />

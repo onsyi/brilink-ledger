@@ -243,7 +243,7 @@ function CloseShift() {
       </section>
 
       {finalCash !== "" &&
-        (Math.abs(variance) > 0 ? (
+        (Math.abs(variance) > 500 ? (
           <p className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-xs sm:px-4 sm:py-3 sm:text-sm">
             <TriangleAlert className="size-4 shrink-0 text-destructive" />
             <span>

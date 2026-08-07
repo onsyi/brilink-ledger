@@ -107,6 +107,19 @@ export function cashDelta(t: LedgerTxn) {
   return fee;
 }
 
+/** Validate a transaction before insert. Returns error message or null. */
+export function validateTxn(t: LedgerTxn): string | null {
+  const principal = num(t.principal_amount);
+  const fee = num(t.customer_fee);
+  const cost = num(t.provider_cost);
+  if (principal < 0) return "Pokok transaksi tidak boleh negatif";
+  if (fee < 0) return "Fee pelanggan tidak boleh negatif";
+  if (cost < 0) return "Biaya provider tidak boleh negatif";
+  if (t.transaction_type === "tarik_tunai" && fee > principal)
+    return "Fee tidak boleh melebihi pokok transaksi";
+  return null;
+}
+
 export function digitalDelta(t: LedgerTxn) {
   const principal = num(t.principal_amount);
   if (t.destination_account === "saldo_bank" || t.destination_account === "saldo_ppob")

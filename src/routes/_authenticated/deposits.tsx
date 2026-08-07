@@ -228,8 +228,9 @@ function Deposits() {
                 className="flex-1"
                 disabled={confirmDeposit.isPending}
                 onClick={() => {
-                  confirmDeposit.mutate(confirmId);
-                  setConfirmId(null);
+                  confirmDeposit.mutate(confirmId, {
+                    onSuccess: () => setConfirmId(null),
+                  });
                 }}
               >
                 {confirmDeposit.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}

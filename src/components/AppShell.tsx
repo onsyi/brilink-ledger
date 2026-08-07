@@ -33,18 +33,21 @@ function OfflineBadge() {
   const [online, setOnline] = useState(isOnline());
 
   useEffect(() => {
+    let active = true;
     const check = async () => {
+      if (!active) return;
       setOnline(isOnline());
       const pending = await getAllPending();
-      setCount(pending.length);
+      if (active) setCount(pending.length);
     };
     check();
-    const interval = setInterval(check, 5000);
+    const interval = setInterval(check, 10000);
     const onOnline = () => check();
     const onOffline = () => check();
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     return () => {
+      active = false;
       clearInterval(interval);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);

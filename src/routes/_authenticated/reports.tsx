@@ -55,7 +55,8 @@ function Reports() {
           shift: s,
           summary,
           expected,
-          variance: s.final_physical_balance === null ? null : num(s.final_physical_balance) - expected,
+          variance:
+            s.final_physical_balance === null ? null : num(s.final_physical_balance) - expected,
           cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
         };
       });
@@ -95,16 +96,22 @@ function Reports() {
           <h2 className="text-base font-semibold">Rekap Hari Ini</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {(() => {
-              const today = new Date().toDateString();
+              const today = new Date().toLocaleDateString("id-ID", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              });
               const todayRows = rows.filter(
-                (r) => new Date(r.shift.start_time).toDateString() === today,
+                (r) =>
+                  new Date(r.shift.start_time).toLocaleDateString("id-ID", {
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                  }) === today,
               );
               const todayProfit = todayRows.reduce((s, r) => s + r.summary.profit, 0);
               const todayTxn = todayRows.reduce((s, r) => s + r.summary.count, 0);
-              const todayDeposit = todayRows.reduce(
-                (s, r) => s + num(r.shift.deposit_amount),
-                0,
-              );
+              const todayDeposit = todayRows.reduce((s, r) => s + num(r.shift.deposit_amount), 0);
               const todayOpen = todayRows.filter((r) => r.shift.status === "open").length;
               return (
                 <>
@@ -186,7 +193,11 @@ function Reports() {
                     </td>
                     <td
                       className={`py-3 ${
-                        variance === null ? "" : variance === 0 ? "text-success" : "text-destructive"
+                        variance === null
+                          ? ""
+                          : variance === 0
+                            ? "text-success"
+                            : "text-destructive"
                       }`}
                     >
                       {variance === null ? "—" : rupiah(variance)}
@@ -201,12 +212,20 @@ function Reports() {
                             </span>
                           )}
                         </span>
-                      ) : "—"}
+                      ) : (
+                        "—"
+                      )}
                     </td>
-                    <td className="py-3">{num(shift.topup_request) > 0 ? rupiah(shift.topup_request) : "—"}</td>
+                    <td className="py-3">
+                      {num(shift.topup_request) > 0 ? rupiah(shift.topup_request) : "—"}
+                    </td>
                     <td className="py-3">{rupiah(shift.deposit_amount)}</td>
                     <td className="py-3">
-                      <span className={shift.status === "open" ? "text-warning" : "text-muted-foreground"}>
+                      <span
+                        className={
+                          shift.status === "open" ? "text-warning" : "text-muted-foreground"
+                        }
+                      >
                         {shift.status === "open" ? "Open" : "Closed"}
                       </span>
                     </td>
@@ -218,10 +237,15 @@ function Reports() {
             {/* Mobile cards */}
             <ul className="space-y-3 md:hidden">
               {rows.map(({ shift, summary, expected, variance, cashier }) => (
-                <li key={shift.id} className="rounded-lg border border-border bg-secondary/30 p-3 text-sm">
+                <li
+                  key={shift.id}
+                  className="rounded-lg border border-border bg-secondary/30 p-3 text-sm"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">{cashier}</span>
-                    <span className={`num text-xs ${shift.status === "open" ? "text-warning" : "text-muted-foreground"}`}>
+                    <span
+                      className={`num text-xs ${shift.status === "open" ? "text-warning" : "text-muted-foreground"}`}
+                    >
                       {shift.status === "open" ? "Open" : "Closed"}
                     </span>
                   </div>
@@ -250,21 +274,37 @@ function Reports() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Kas akhir</span>
-                      <span>{shift.final_physical_balance === null ? "—" : rupiah(shift.final_physical_balance)}</span>
+                      <span>
+                        {shift.final_physical_balance === null
+                          ? "—"
+                          : rupiah(shift.final_physical_balance)}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Selisih</span>
-                      <span className={variance === null ? "" : variance === 0 ? "text-success" : "text-destructive"}>
+                      <span
+                        className={
+                          variance === null
+                            ? ""
+                            : variance === 0
+                              ? "text-success"
+                              : "text-destructive"
+                        }
+                      >
                         {variance === null ? "—" : rupiah(variance)}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Pengeluaran</span>
-                      <span>{num(shift.total_expenses) > 0 ? rupiah(shift.total_expenses) : "—"}</span>
+                      <span>
+                        {num(shift.total_expenses) > 0 ? rupiah(shift.total_expenses) : "—"}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Top-up</span>
-                      <span>{num(shift.topup_request) > 0 ? rupiah(shift.topup_request) : "—"}</span>
+                      <span>
+                        {num(shift.topup_request) > 0 ? rupiah(shift.topup_request) : "—"}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Setoran</span>
@@ -272,7 +312,9 @@ function Reports() {
                     </div>
                   </div>
                   {shift.expense_notes && (
-                    <p className="mt-2 text-xs text-muted-foreground">Catatan: {shift.expense_notes}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Catatan: {shift.expense_notes}
+                    </p>
                   )}
                 </li>
               ))}

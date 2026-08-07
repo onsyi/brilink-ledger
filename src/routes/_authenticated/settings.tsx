@@ -150,6 +150,11 @@ function SettingsPage() {
       toast.error("Password minimal 6 karakter");
       return;
     }
+    // Simple email format check
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail.trim())) {
+      toast.error("Format email tidak valid");
+      return;
+    }
     setAddingCashier(true);
 
     const { data, error } = await supabase.auth.signUp({
