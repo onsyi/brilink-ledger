@@ -27,7 +27,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
     queryFn: async () => {
       let query = supabase
         .from("shifts")
-        .select("*")
+        .select("id, user_id, start_time, initial_physical_balance, status, branch_id")
         .order("start_time", { ascending: false })
         .limit(60);
       if (branchFilter !== "all") {
@@ -38,13 +38,24 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       const ids = (shifts ?? []).map((s) => s.id);
       const [{ data: txns }, { data: profiles }] = await Promise.all([
         ids.length
-          ? supabase.from("transactions").select("*").in("shift_id", ids)
+          ? supabase
+              .from("transactions")
+              .select(
+                "shift_id, transaction_type, source_account, destination_account, principal_amount, customer_fee, provider_cost, profit_net",
+              )
+              .in("shift_id", ids)
           : Promise.resolve({ data: [] as never[] }),
         supabase.from("profiles").select("id, username"),
       ]);
       const nameOf = (id: string) => (profiles ?? []).find((p) => p.id === id)?.username ?? "kasir";
+      const txnsByShift = new Map<string, typeof txns>();
+      (txns ?? []).forEach((t) => {
+        const arr = txnsByShift.get(t.shift_id) ?? [];
+        arr.push(t);
+        txnsByShift.set(t.shift_id, arr);
+      });
       const rows = (shifts ?? []).map((s) => {
-        const own = (txns ?? []).filter((t) => t.shift_id === s.id);
+        const own = txnsByShift.get(s.id) ?? [];
         return { shift: s, summary: summarize(own), cashier: nameOf(s.user_id) };
       });
       const today = new Date().toLocaleDateString("id-ID");

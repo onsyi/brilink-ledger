@@ -10,6 +10,7 @@ import {
 } from "@/lib/offline-db";
 
 const MAX_RETRIES = 5;
+const BATCH_SIZE = 5;
 
 async function syncRecord(record: PendingRecord): Promise<boolean> {
   try {
@@ -30,18 +31,32 @@ async function syncAll(): Promise<{ synced: number; failed: number; cleaned: num
   let failed = 0;
   let cleaned = 0;
 
-  for (const record of pending) {
-    const retries = record.retries ?? 0;
-    const ok = await syncRecord(record);
-    if (ok) {
-      await removePending(record.id);
-      synced++;
-    } else if (retries >= MAX_RETRIES) {
-      await removePending(record.id);
-      cleaned++;
-    } else {
-      await incrementRetry(record.id);
-      failed++;
+  for (let i = 0; i < pending.length; i += BATCH_SIZE) {
+    const batch = pending.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map(async (record) => {
+        const retries = record.retries ?? 0;
+        const ok = await syncRecord(record);
+        if (ok) {
+          await removePending(record.id);
+          return "synced" as const;
+        } else if (retries >= MAX_RETRIES) {
+          await removePending(record.id);
+          return "cleaned" as const;
+        } else {
+          await incrementRetry(record.id);
+          return "failed" as const;
+        }
+      }),
+    );
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        if (r.value === "synced") synced++;
+        else if (r.value === "cleaned") cleaned++;
+        else if (r.value === "failed") failed++;
+      } else {
+        failed++;
+      }
     }
   }
 

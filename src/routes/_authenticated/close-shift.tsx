@@ -43,7 +43,7 @@ function CloseShift() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("shifts")
-        .select("*")
+        .select("id, user_id, start_time, initial_physical_balance, status")
         .eq("user_id", userId!)
         .eq("status", "open")
         .maybeSingle();
@@ -60,7 +60,9 @@ function CloseShift() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
-        .select("*")
+        .select(
+          "transaction_type, source_account, destination_account, principal_amount, customer_fee, provider_cost, profit_net",
+        )
         .eq("shift_id", shiftId!);
       if (error) throw error;
       return data ?? [];

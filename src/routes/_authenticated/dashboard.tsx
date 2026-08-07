@@ -33,7 +33,7 @@ function Dashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("shifts")
-        .select("*")
+        .select("id, user_id, start_time, initial_physical_balance, total_expenses, status")
         .eq("user_id", userId!)
         .eq("status", "open")
         .maybeSingle();

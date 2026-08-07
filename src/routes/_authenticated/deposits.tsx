@@ -34,7 +34,9 @@ function Deposits() {
     queryFn: async () => {
       let query = supabase
         .from("shifts")
-        .select("*, profiles!shifts_user_id_fkey(username)")
+        .select(
+          "id, user_id, start_time, end_time, final_physical_balance, deposit_amount, profiles!shifts_user_id_fkey(username)",
+        )
         .eq("status", "closed")
         .not("deposit_amount", "eq", 0)
         .order("end_time", { ascending: false })
