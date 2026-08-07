@@ -314,6 +314,12 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      admin_delete_user: {
+        Args: {
+          target_user_id: string;
+        };
+        Returns: void;
+      };
       admin_update_user_email: {
         Args: {
           target_user_id: string;

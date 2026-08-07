@@ -81,6 +81,9 @@ function SettingsPage() {
   const [editEmail, setEditEmail] = useState("");
   const [savingCashier, setSavingCashier] = useState(false);
 
+  const [deleteUser, setDeleteUser] = useState<UserProfile | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
+
   const branches = useQuery({
     queryKey: ["branches"],
     enabled: isOwner,
@@ -330,6 +333,22 @@ function SettingsPage() {
     fetchUsers();
   };
 
+  const deleteUserAccount = async () => {
+    if (!deleteUser) return;
+    setDeletingUser(true);
+    const { error } = await supabase.rpc("admin_delete_user", {
+      target_user_id: deleteUser.id,
+    });
+    setDeletingUser(false);
+    if (error) {
+      toast.error("Gagal menghapus user: " + error.message);
+    } else {
+      toast.success(`User ${deleteUser.username} berhasil dihapus`);
+      setDeleteUser(null);
+      fetchUsers();
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -517,6 +536,15 @@ function SettingsPage() {
                         >
                           <KeyRound className="mr-1 size-3" />
                           Reset Password
+                        </Button>
+                      )}
+                      {u.role !== "owner" && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => setDeleteUser(u)}
+                        >
+                          Hapus
                         </Button>
                       )}
                     </div>
@@ -727,6 +755,29 @@ function SettingsPage() {
             <Button onClick={saveBranchAssignment} disabled={savingBranch}>
               {savingBranch && <Loader2 className="mr-2 size-4 animate-spin" />}
               Simpan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete User Dialog */}
+      <Dialog open={!!deleteUser} onOpenChange={() => setDeleteUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hapus User</DialogTitle>
+            <DialogDescription>
+              Anda yakin ingin menghapus akun{" "}
+              <span className="font-medium">{deleteUser?.username}</span>? Tindakan ini tidak dapat
+              dibatalkan. Semua data terkait (shift, transaksi) akan tetap tersimpan di database.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setDeleteUser(null)}>
+              Batal
+            </Button>
+            <Button variant="destructive" onClick={deleteUserAccount} disabled={deletingUser}>
+              {deletingUser && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Ya, Hapus
             </Button>
           </DialogFooter>
         </DialogContent>
