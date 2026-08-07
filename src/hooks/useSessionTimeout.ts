@@ -55,5 +55,5 @@ export function useSessionTimeout(onTimeout: () => void) {
     resetTimer();
   }, [resetTimer]);
 
-  return { showWarning, setShowWarning, extendSession };
+  return { showWarning, extendSession };
 }

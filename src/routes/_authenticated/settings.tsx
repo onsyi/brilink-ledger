@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import {
   Dialog,
   DialogContent,
@@ -61,7 +62,6 @@ function SettingsPage() {
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [resetUserEmail, setResetUserEmail] = useState("");
   const [resetUserName, setResetUserName] = useState("");
-  const [newResetPassword, setNewResetPassword] = useState("");
   const [resettingPassword, setResettingPassword] = useState(false);
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -173,10 +173,6 @@ function SettingsPage() {
     }
 
     if (data.user) {
-      await supabase
-        .from("user_roles")
-        .upsert({ user_id: data.user.id, role: "cashier" }, { onConflict: "user_id,role" });
-
       toast.success(`Akun kasir ${newEmail.trim()} berhasil dibuat`);
       setShowAddCashier(false);
       setNewEmail("");
@@ -198,30 +194,17 @@ function SettingsPage() {
       toast.error("Data pengguna tidak lengkap");
       return;
     }
-    if (!newResetPassword || newResetPassword.length < 6) {
-      toast.error("Password baru minimal 6 karakter");
-      return;
-    }
     setResettingPassword(true);
 
-    const { error } = await supabase.auth.admin.updateUserById(resetUserId, {
-      password: newResetPassword,
+    const { error } = await supabase.auth.resetPasswordForEmail(resetUserEmail, {
+      redirectTo: window.location.origin,
     });
 
     if (error) {
-      // admin API requires service_role — fallback to reset email to the TARGET user
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(resetUserEmail, {
-        redirectTo: window.location.origin,
-      });
-      if (resetError) {
-        toast.error("Gagal mengirim email reset. Hubungi admin.");
-      } else {
-        toast.success(`Email reset password terkirim ke ${resetUserEmail}`);
-      }
+      toast.error("Gagal mengirim email reset. Hubungi admin.");
     } else {
-      toast.success("Password berhasil direset");
+      toast.success(`Email reset password terkirim ke ${resetUserEmail}`);
       setShowResetPassword(false);
-      setNewResetPassword("");
     }
     setResettingPassword(false);
   };
@@ -463,32 +446,20 @@ function SettingsPage() {
       <Dialog open={showResetPassword} onOpenChange={setShowResetPassword}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reset Password</DialogTitle>
+            <DialogTitle>Kirim Email Reset Password</DialogTitle>
             <DialogDescription>
-              Atur password baru untuk <span className="font-medium">{resetUserName}</span>.
+              Email reset password akan dikirim ke{" "}
+              <span className="font-medium">{resetUserEmail}</span>. Kasir akan diarahkan ke halaman
+              login untuk mengatur password baru.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="reset-password">Password Baru</Label>
-              <Input
-                id="reset-password"
-                type="password"
-                value={newResetPassword}
-                onChange={(e) => setNewResetPassword(e.target.value)}
-                placeholder="Minimal 6 karakter"
-                maxLength={72}
-                className="h-11"
-              />
-            </div>
-          </div>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setShowResetPassword(false)}>
               Batal
             </Button>
             <Button onClick={resetPassword} disabled={resettingPassword}>
               {resettingPassword && <Loader2 className="mr-2 size-4 animate-spin" />}
-              Reset Password
+              Kirim Email
             </Button>
           </DialogFooter>
         </DialogContent>

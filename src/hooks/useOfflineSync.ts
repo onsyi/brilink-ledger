@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   getAllPending,
   removePending,
+  incrementRetry,
   clearPending,
   isOnline,
   type PendingRecord,
@@ -30,16 +31,16 @@ async function syncAll(): Promise<{ synced: number; failed: number; cleaned: num
   let cleaned = 0;
 
   for (const record of pending) {
-    const retries = (record as unknown as { retries?: number }).retries ?? 0;
+    const retries = record.retries ?? 0;
     const ok = await syncRecord(record);
     if (ok) {
       await removePending(record.id);
       synced++;
     } else if (retries >= MAX_RETRIES) {
-      // Permanently failed — remove to prevent accumulation
       await removePending(record.id);
       cleaned++;
     } else {
+      await incrementRetry(record.id);
       failed++;
     }
   }

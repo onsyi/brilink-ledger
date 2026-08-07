@@ -21,6 +21,7 @@ export type PendingRecord = {
   table: string;
   payload: Record<string, unknown>;
   createdAt: string;
+  retries: number;
 };
 
 export async function addPending(record: PendingRecord): Promise<void> {
@@ -58,6 +59,24 @@ export async function clearPending(): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
     tx.objectStore(STORE_NAME).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function incrementRetry(id: string): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    const getReq = store.get(id);
+    getReq.onsuccess = () => {
+      const record = getReq.result;
+      if (record) {
+        record.retries = (record.retries ?? 0) + 1;
+        store.put(record);
+      }
+    };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
