@@ -314,6 +314,13 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      admin_update_user_email: {
+        Args: {
+          target_user_id: string;
+          new_email: string;
+        };
+        Returns: void;
+      };
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"];

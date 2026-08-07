@@ -78,6 +78,7 @@ function SettingsPage() {
   const [editCashier, setEditCashier] = useState<UserProfile | null>(null);
   const [editUsername, setEditUsername] = useState("");
   const [editFullName, setEditFullName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
   const [savingCashier, setSavingCashier] = useState(false);
 
   const branches = useQuery({
@@ -286,22 +287,47 @@ function SettingsPage() {
       toast.error("Username tidak boleh kosong");
       return;
     }
-    setSavingCashier(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        username: editUsername.trim(),
-        full_name: editFullName.trim() || null,
-      })
-      .eq("id", editCashier.id);
-    setSavingCashier(false);
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success(`Profil ${editCashier.username} berhasil diubah`);
-      setEditCashier(null);
-      fetchUsers();
+    if (!editEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editEmail.trim())) {
+      toast.error("Format email tidak valid");
+      return;
     }
+    setSavingCashier(true);
+
+    const emailChanged = editEmail.trim() !== editCashier.email;
+    const usernameChanged = editUsername.trim() !== editCashier.username;
+    const fullNameChanged = (editFullName.trim() || null) !== (editCashier.full_name ?? null);
+
+    if (emailChanged) {
+      const { error: rpcErr } = await supabase.rpc("admin_update_user_email", {
+        target_user_id: editCashier.id,
+        new_email: editEmail.trim(),
+      });
+      if (rpcErr) {
+        toast.error("Gagal update email: " + rpcErr.message);
+        setSavingCashier(false);
+        return;
+      }
+    }
+
+    if (usernameChanged || fullNameChanged) {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          username: editUsername.trim(),
+          full_name: editFullName.trim() || null,
+        })
+        .eq("id", editCashier.id);
+      if (error) {
+        toast.error(error.message);
+        setSavingCashier(false);
+        return;
+      }
+    }
+
+    setSavingCashier(false);
+    toast.success(`Profil ${editCashier.username} berhasil diubah`);
+    setEditCashier(null);
+    fetchUsers();
   };
 
   if (loading) {
@@ -458,6 +484,7 @@ function SettingsPage() {
                             setEditCashier(u);
                             setEditUsername(u.username);
                             setEditFullName(u.full_name ?? "");
+                            setEditEmail(u.email ?? "");
                           }}
                           title="Edit profil"
                         >
@@ -623,13 +650,13 @@ function SettingsPage() {
               <Label htmlFor="edit-cashier-email">Email</Label>
               <Input
                 id="edit-cashier-email"
-                value={editCashier?.email ?? ""}
-                disabled
-                className="h-11 bg-muted"
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                placeholder="kasir@agen.id"
+                maxLength={255}
+                className="h-11"
               />
-              <p className="text-xs text-muted-foreground">
-                Email hanya bisa diubah oleh Supabase Admin.
-              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-cashier-username">Username</Label>
