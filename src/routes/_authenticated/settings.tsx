@@ -214,6 +214,15 @@ function SettingsPage() {
     }
 
     if (data.user) {
+      // Verify role was assigned by trigger, if not set it manually
+      const { data: roleCheck } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+      if (!roleCheck) {
+        await supabase.from("user_roles").insert({ user_id: data.user.id, role: "cashier" });
+      }
       // Set branch_id on the profile if selected
       if (newBranchId) {
         const { error: branchErr } = await supabase
