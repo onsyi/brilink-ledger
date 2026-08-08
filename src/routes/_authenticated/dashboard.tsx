@@ -2,7 +2,19 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { PlayCircle, Loader2, ArrowRight, WifiOff } from "lucide-react";
+import {
+  PlayCircle,
+  Loader2,
+  ArrowRight,
+  WifiOff,
+  Wallet,
+  TrendingUp,
+  Receipt,
+  Banknote,
+  ArrowDownLeft,
+  ArrowUpRight,
+  CreditCard,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -51,8 +63,14 @@ function Dashboard() {
 
 function LoadingBlock() {
   return (
-    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-      <Loader2 className="size-4 animate-spin" /> Memuat data shift…
+    <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4">
+      <div className="relative">
+        <div className="absolute inset-0 rounded-full bg-primary/20 blur-xl" />
+        <div className="relative flex size-14 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
+          <Loader2 className="size-6 animate-spin text-primary" />
+        </div>
+      </div>
+      <p className="text-sm font-medium text-muted-foreground">Memuat data shift…</p>
     </div>
   );
 }
@@ -122,13 +140,21 @@ function OpenShiftPanel({
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
-      <section className="ledger-card p-5 sm:p-6">
-        <h1 className="text-lg font-semibold sm:text-xl">Buka Shift</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Tidak ada shift aktif. Isi modal kas fisik di laci untuk memulai shift baru.
-        </p>
+      {/* Open Shift Card */}
+      <section className="glass-card glass-card-hover p-6 sm:p-8">
+        <div className="flex items-start gap-3">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 shadow-[0_0_15px_-3px] shadow-primary/20">
+            <PlayCircle className="size-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold sm:text-2xl">Buka Shift</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Tidak ada shift aktif. Isi modal kas fisik di laci untuk memulai.
+            </p>
+          </div>
+        </div>
         <form
-          className="mt-5 space-y-4"
+          className="mt-6 space-y-5"
           onSubmit={(e) => {
             e.preventDefault();
             openShift.mutate();
@@ -141,7 +167,7 @@ function OpenShiftPanel({
             onChange={setInitial}
             required
           />
-          <Button type="submit" className="w-full" disabled={openShift.isPending}>
+          <Button type="submit" className="w-full" size="lg" disabled={openShift.isPending}>
             {openShift.isPending ? (
               <Loader2 className="mr-2 size-4 animate-spin" />
             ) : (
@@ -152,29 +178,42 @@ function OpenShiftPanel({
         </form>
       </section>
 
-      <section className="ledger-card p-5 sm:p-6">
-        <h2 className="text-base font-semibold">Saldo digital dari shift sebelumnya</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Ditarik otomatis dari snapshot penutupan terakhir agar kontinuitas data terjaga.
-        </p>
+      {/* Previous Shift Digital Balances */}
+      <section className="ledger-card p-6 sm:p-8">
+        <div className="flex items-start gap-3">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-digital/15">
+            <CreditCard className="size-5 text-digital" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold">Saldo digital sebelumnya</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Dari snapshot penutupan terakhir.
+            </p>
+          </div>
+        </div>
         {lastShift.isLoading ? (
-          <p className="mt-4 text-sm text-muted-foreground">Memuat…</p>
+          <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Memuat…
+          </div>
         ) : !lastShift.data ? (
-          <p className="mt-4 text-sm text-muted-foreground">
-            Belum ada shift tertutup. Snapshot akan tersedia setelah shift pertama ditutup.
+          <p className="mt-6 rounded-xl border border-border/60 bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
+            Belum ada shift tertutup. Snapshot tersedia setelah shift pertama ditutup.
           </p>
         ) : (
           <>
-            <p className="num mt-4 text-xl font-semibold text-primary sm:text-2xl">
+            <p className="num mt-5 text-2xl font-bold gradient-text-cyan sm:text-3xl">
               {rupiah(digitalCarry)}
             </p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <BalanceList title="Bank" rows={lastShift.data.banks} nameKey="bank_name" />
               <BalanceList title="PPOB" rows={lastShift.data.ppob} nameKey="provider_name" />
             </div>
-            <p className="num mt-4 text-xs text-muted-foreground">
-              Kas fisik akhir shift lalu: {rupiah(lastShift.data.shift.final_physical_balance)}
-            </p>
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-border/50 bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+              <Banknote className="size-3.5 shrink-0 text-cash" />
+              <span className="num">
+                Kas fisik akhir shift lalu: {rupiah(lastShift.data.shift.final_physical_balance)}
+              </span>
+            </div>
           </>
         )}
       </section>
@@ -192,16 +231,16 @@ function BalanceList({
   nameKey: string;
 }) {
   return (
-    <div>
-      <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+    <div className="rounded-xl border border-border/40 bg-secondary/20 p-3">
+      <h3 className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
         {title}
       </h3>
-      <ul className="mt-2 space-y-1 text-sm">
+      <ul className="mt-2 space-y-1.5 text-sm">
         {rows.length === 0 && <li className="text-muted-foreground">—</li>}
         {rows.map((r) => (
           <li key={String(r[nameKey])} className="flex justify-between gap-3">
             <span className="text-muted-foreground">{String(r[nameKey])}</span>
-            <span className="num">{rupiah(r["final_amount"] as number)}</span>
+            <span className="num font-medium">{rupiah(r["final_amount"] as number)}</span>
           </li>
         ))}
       </ul>
@@ -256,54 +295,113 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
 
   return (
     <div className="space-y-5 sm:space-y-6">
+      {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold sm:text-xl">Shift aktif</h1>
-          <p className="num text-xs text-muted-foreground sm:text-sm">
-            Dibuka {new Date(shift.start_time).toLocaleString("id-ID")} · modal{" "}
-            {rupiah(shift.initial_physical_balance)}
-          </p>
+          <h1 className="flex items-center gap-2.5 text-xl font-bold sm:text-2xl">
+            <span className="relative flex size-2.5">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
+              <span className="relative inline-flex size-2.5 rounded-full bg-success" />
+            </span>
+            Shift aktif
+          </h1>
+          <div className="mt-1.5 inline-flex items-center gap-2 rounded-lg border border-border/50 bg-secondary/40 px-3 py-1 text-xs text-muted-foreground backdrop-blur-sm">
+            <span className="num">Dibuka {new Date(shift.start_time).toLocaleString("id-ID")}</span>
+            <span className="text-border">·</span>
+            <span className="num font-semibold text-cash">
+              Modal {rupiah(shift.initial_physical_balance)}
+            </span>
+          </div>
         </div>
-        <Button asChild variant="secondary" size="sm">
+        <Button asChild variant="outline" size="sm">
           <Link to="/close-shift">
             Tutup shift <ArrowRight className="ml-1 size-4" />
           </Link>
         </Button>
       </div>
 
+      {/* Offline Warning */}
       {!isOnline() && (
-        <p className="flex items-center gap-2 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2.5 text-xs sm:text-sm">
-          <WifiOff className="size-4 shrink-0 text-warning" />
-          Mode offline — transaksi akan disinkron otomatis saat koneksi pulih.
-        </p>
+        <div className="flex items-center gap-3 rounded-xl border border-warning/40 bg-warning/8 px-4 py-3 text-sm backdrop-blur-sm">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-warning/15">
+            <WifiOff className="size-4 text-warning" />
+          </div>
+          <span className="text-muted-foreground">
+            Mode offline — transaksi akan disinkron otomatis saat koneksi pulih.
+          </span>
+        </div>
       )}
 
+      {/* KPI Cards */}
       <div className="responsive-grid-3">
-        <Kpi label="Ekspektasi kas fisik" value={rupiah(expected)} tone="cash" />
-        <Kpi label="Laba bersih shift" value={rupiah(summary.profit)} tone="success" />
-        <Kpi label="Total transaksi" value={String(summary.count)} />
+        <Kpi
+          label="Ekspektasi kas fisik"
+          value={rupiah(expected)}
+          tone="cash"
+          icon={<Wallet className="size-5" />}
+        />
+        <Kpi
+          label="Laba bersih shift"
+          value={rupiah(summary.profit)}
+          tone="success"
+          icon={<TrendingUp className="size-5" />}
+        />
+        <Kpi
+          label="Total transaksi"
+          value={String(summary.count)}
+          tone="digital"
+          icon={<Receipt className="size-5" />}
+        />
       </div>
 
-      <section className="ledger-card p-4 sm:p-5">
-        <h2 className="text-base font-semibold">Mutasi shift ini</h2>
-        <dl className="num mt-4 grid grid-cols-2 gap-2 text-xs sm:gap-3 sm:text-sm">
-          <Row label="Total pokok" value={rupiah(summary.principal)} />
-          <Row label="Fee pelanggan" value={rupiah(summary.fees)} />
-          <Row label="Biaya provider" value={rupiah(summary.providerCost)} />
-          <Row label="Kas masuk" value={rupiah(summary.cashIn)} />
-          <Row label="Kas keluar" value={rupiah(summary.cashOut)} />
-          <Row label="Pengeluaran" value={rupiah(shift.total_expenses)} />
-        </dl>
+      {/* Mutation Detail */}
+      <section className="glass-card p-5 sm:p-6">
+        <h2 className="text-lg font-bold">Mutasi shift ini</h2>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 sm:gap-3">
+          <MutRow
+            label="Total pokok"
+            value={rupiah(summary.principal)}
+            icon={<Banknote className="size-3.5 text-cash" />}
+          />
+          <MutRow
+            label="Fee pelanggan"
+            value={rupiah(summary.fees)}
+            icon={<Receipt className="size-3.5 text-primary" />}
+          />
+          <MutRow
+            label="Biaya provider"
+            value={rupiah(summary.providerCost)}
+            icon={<CreditCard className="size-3.5 text-destructive" />}
+          />
+          <MutRow
+            label="Kas masuk"
+            value={rupiah(summary.cashIn)}
+            icon={<ArrowDownLeft className="size-3.5 text-success" />}
+          />
+          <MutRow
+            label="Kas keluar"
+            value={rupiah(summary.cashOut)}
+            icon={<ArrowUpRight className="size-3.5 text-warning" />}
+          />
+          <MutRow
+            label="Pengeluaran"
+            value={rupiah(shift.total_expenses)}
+            icon={<Wallet className="size-3.5 text-destructive" />}
+          />
+        </div>
       </section>
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function MutRow({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
   return (
-    <div className="flex justify-between gap-2">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd>{value}</dd>
+    <div className="flex items-center justify-between gap-2 rounded-xl border border-border/40 bg-secondary/20 px-3.5 py-2.5">
+      <div className="flex items-center gap-2">
+        {icon}
+        <dt className="text-xs text-muted-foreground sm:text-sm">{label}</dt>
+      </div>
+      <dd className="num text-xs font-semibold sm:text-sm">{value}</dd>
     </div>
   );
 }
@@ -312,23 +410,52 @@ function Kpi({
   label,
   value,
   tone,
+  icon,
 }: {
   label: string;
   value: string;
-  tone?: "cash" | "success" | "warning";
+  tone?: "cash" | "success" | "warning" | "digital";
+  icon?: React.ReactNode;
 }) {
-  const toneClass =
-    tone === "cash"
-      ? "text-cash"
-      : tone === "success"
-        ? "text-success"
-        : tone === "warning"
-          ? "text-warning"
-          : "text-foreground";
+  const toneMap = {
+    cash: {
+      gradient: "gradient-text-gold",
+      iconBg: "bg-[oklch(0.82_0.16_82_/_0.15)]",
+      iconColor: "text-cash",
+    },
+    success: {
+      gradient: "gradient-text-emerald",
+      iconBg: "bg-[oklch(0.72_0.17_155_/_0.15)]",
+      iconColor: "text-success",
+    },
+    warning: {
+      gradient: "text-warning",
+      iconBg: "bg-[oklch(0.82_0.16_75_/_0.15)]",
+      iconColor: "text-warning",
+    },
+    digital: {
+      gradient: "gradient-text-cyan",
+      iconBg: "bg-[oklch(0.72_0.13_205_/_0.15)]",
+      iconColor: "text-digital",
+    },
+  };
+  const t = tone ? toneMap[tone] : null;
+
   return (
-    <div className="ledger-card p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`num mt-2 text-lg font-semibold ${toneClass}`}>{value}</p>
+    <div className="ledger-card glass-card-hover p-5">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        {icon && t && (
+          <div
+            className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${t.iconBg}`}
+          >
+            <span className={t.iconColor}>{icon}</span>
+          </div>
+        )}
+      </div>
+      <p className={`num mt-3 text-xl font-bold sm:text-2xl ${t?.gradient ?? "text-foreground"}`}>
+        {value}
+      </p>
     </div>
   );
 }

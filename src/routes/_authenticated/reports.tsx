@@ -1,10 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Loader2, ShieldCheck } from "lucide-react";
+import {
+  Loader2,
+  ShieldCheck,
+  TrendingUp,
+  Wallet,
+  BarChart3,
+  Calendar,
+  Building2,
+  Receipt,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { expectedCash, num, rupiah, summarize } from "@/lib/ledger";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({
@@ -107,30 +120,30 @@ function Reports() {
         arr.push(t);
         txnsByShift.set(t.shift_id, arr);
       });
-        return (shiftRows ?? [])
-          .filter((s) => filterByPeriod(s.start_time, periodFilter))
-          .map((s) => {
-        const own = txnsByShift.get(s.id) ?? [];
-        const summary = summarize(own);
-        const expected = expectedCash({
-          initial: num(s.initial_physical_balance),
-          cashNet: summary.cashNet,
-          pendingReceivables: debtByShift.get(s.id) ?? 0,
-          expenses: num(s.total_expenses),
+      return (shiftRows ?? [])
+        .filter((s) => filterByPeriod(s.start_time, periodFilter))
+        .map((s) => {
+          const own = txnsByShift.get(s.id) ?? [];
+          const summary = summarize(own);
+          const expected = expectedCash({
+            initial: num(s.initial_physical_balance),
+            cashNet: summary.cashNet,
+            pendingReceivables: debtByShift.get(s.id) ?? 0,
+            expenses: num(s.total_expenses),
+          });
+          return {
+            shift: s,
+            summary,
+            expected,
+            variance:
+              s.final_physical_balance === null ? null : num(s.final_physical_balance) - expected,
+            cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
+          };
         });
-        return {
-          shift: s,
-          summary,
-          expected,
-          variance:
-            s.final_physical_balance === null ? null : num(s.final_physical_balance) - expected,
-          cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
-        };
-      });
     },
   });
 
-  const rows = shifts.data ?? [];
+  const rows = useMemo(() => shifts.data ?? [], [shifts.data]);
   const totalProfit = rows.reduce((s, r) => s + r.summary.profit, 0);
   const totalDeposit = rows.reduce((s, r) => s + num(r.shift.deposit_amount), 0);
 
@@ -154,271 +167,285 @@ function Reports() {
           ? "Bulan Ini"
           : "Semua Waktu";
 
+  // Data points for SVG chart (chronological order)
+  const chartPoints = useMemo(() => {
+    const sorted = [...rows].reverse().slice(-12);
+    const maxVal = Math.max(...sorted.map((r) => r.summary.profit), 10000);
+    return sorted.map((r, i) => {
+      const height = Math.max(15, Math.round((r.summary.profit / maxVal) * 100));
+      return {
+        id: r.shift.id,
+        height,
+        profit: r.summary.profit,
+        date: new Date(r.shift.start_time).toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "short",
+        }),
+      };
+    });
+  }, [rows]);
+
+  const periods: { id: Period; label: string }[] = [
+    { id: "all", label: "Semua Waktu" },
+    { id: "today", label: "Hari Ini" },
+    { id: "week", label: "7 Hari Terakhir" },
+    { id: "month", label: "Bulan Ini" },
+  ];
+
   return (
-    <div className="space-y-5 sm:space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="space-y-6 sm:space-y-7">
+      {/* Header */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold sm:text-xl">Laporan & Audit Shift</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="flex items-center gap-2.5 text-xl font-bold sm:text-2xl">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-primary/15 shadow-[0_0_15px_-3px] shadow-primary/20">
+              <BarChart3 className="size-5 text-primary" />
+            </div>
+            Laporan & Audit Shift
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {loading
               ? "Memuat hak akses…"
               : isOwner
-                ? "Semua shift dari seluruh kasir."
-                : "Hanya shift milik akun Anda (akses kasir)."}
+                ? "Semua shift dari seluruh kasir outlet."
+                : "Hanya shift milik akun Anda."}
           </p>
         </div>
-        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs">
-          <ShieldCheck className="size-3.5 text-primary" />{" "}
-          {loading ? "…" : isOwner ? "Owner" : "Kasir"}
-        </span>
-        {isOwner && branches.data && branches.data.length > 0 && (
-          <select
-            value={branchFilter}
-            onChange={(e) => setBranchFilter(e.target.value)}
-            className="h-8 rounded-lg border border-border bg-secondary px-2 text-xs"
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
+            <ShieldCheck className="size-3.5" />
+            {loading ? "…" : isOwner ? "Owner Mode" : "Kasir Mode"}
+          </span>
+          {isOwner && branches.data && branches.data.length > 0 && (
+            <div className="relative">
+              <Building2 className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <select
+                value={branchFilter}
+                onChange={(e) => setBranchFilter(e.target.value)}
+                className="h-8 appearance-none rounded-xl border border-border/60 bg-secondary/60 py-1 pl-8 pr-3 text-xs font-medium backdrop-blur-sm transition-colors hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="all">Semua Cabang</option>
+                {branches.data.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Segmented Period Filter Chips */}
+      <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-border/60 bg-secondary/30 p-1.5 backdrop-blur-sm hide-scrollbar">
+        <Calendar className="ml-2 size-4 text-muted-foreground shrink-0" />
+        {periods.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => setPeriodFilter(p.id)}
+            className={cn(
+              "rounded-xl px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer",
+              periodFilter === p.id
+                ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
+                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+            )}
           >
-            <option value="all">Semua Cabang</option>
-            {branches.data.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <select
-          value={periodFilter}
-          onChange={(e) => setPeriodFilter(e.target.value as Period)}
-          className="h-8 rounded-lg border border-border bg-secondary px-2 text-xs"
-        >
-          <option value="all">Semua Waktu</option>
-          <option value="today">Hari Ini</option>
-          <option value="week">7 Hari Terakhir</option>
-          <option value="month">Bulan Ini</option>
-        </select>
+            {p.label}
+          </button>
+        ))}
       </div>
 
+      {/* Stats Summary Cards */}
       <div className="responsive-grid-3">
-        <Stat label="Total laba bersih" value={rupiah(totalProfit)} tone="text-success" />
-        <Stat label="Total setoran kasir" value={rupiah(totalDeposit)} tone="text-cash" />
+        <Stat
+          label="Total laba bersih"
+          value={rupiah(totalProfit)}
+          icon={<TrendingUp className="size-5" />}
+          gradient="gradient-text-emerald"
+          iconBg="bg-[oklch(0.72_0.17_155_/_0.15)] text-success"
+        />
+        <Stat
+          label="Total setoran kasir"
+          value={rupiah(totalDeposit)}
+          icon={<Wallet className="size-5" />}
+          gradient="gradient-text-gold"
+          iconBg="bg-[oklch(0.82_0.16_82_/_0.15)] text-cash"
+        />
+        <Stat
+          label="Total transaksi"
+          value={String(todayStats.txn)}
+          icon={<Receipt className="size-5" />}
+          gradient="gradient-text-cyan"
+          iconBg="bg-[oklch(0.72_0.13_205_/_0.15)] text-digital"
+        />
       </div>
 
-      {rows.length > 0 && (
-        <section className="ledger-card p-4 sm:p-5">
-          <h2 className="text-base font-semibold">Rekap {periodLabel}</h2>
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* Interactive Profit Trend Chart (SVG) */}
+      {chartPoints.length > 0 && (
+        <section className="glass-card p-5 sm:p-6">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs text-muted-foreground">Shift</p>
-              <p className="num mt-1 text-lg font-semibold">{todayStats.count}</p>
-              {todayStats.open > 0 && (
-                <p className="text-xs text-warning">{todayStats.open} masih buka</p>
-              )}
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Transaksi</p>
-              <p className="num mt-1 text-lg font-semibold">{todayStats.txn}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Laba hari ini</p>
-              <p className="num mt-1 text-lg font-semibold text-success">
-                {rupiah(todayStats.profit)}
+              <h2 className="text-base font-bold">Grafik Laba Bersih Shift</h2>
+              <p className="text-xs text-muted-foreground">
+                Tren performa {chartPoints.length} shift terakhir
               </p>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Setoran</p>
-              <p className="num mt-1 text-lg font-semibold text-cash">
-                {rupiah(todayStats.deposit)}
-              </p>
-            </div>
+            <span className="num text-xs font-bold text-success bg-success/15 border border-success/25 px-2.5 py-1 rounded-lg">
+              Rekap {periodLabel}
+            </span>
+          </div>
+
+          <div className="mt-6 flex h-36 items-end justify-between gap-2 pt-4 px-2 border-b border-border/40">
+            {chartPoints.map((pt) => (
+              <div
+                key={pt.id}
+                className="group relative flex flex-1 flex-col items-center gap-1.5 h-full justify-end"
+              >
+                {/* Tooltip on hover */}
+                <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 rounded-lg bg-card border border-border px-2 py-1 text-[10px] num font-bold shadow-lg whitespace-nowrap">
+                  {rupiah(pt.profit)}
+                </div>
+                {/* Bar */}
+                <div
+                  style={{ height: `${pt.height}%` }}
+                  className="w-full max-w-[28px] rounded-t-lg bg-gradient-to-t from-[oklch(0.72_0.17_155_/_0.4)] to-[oklch(0.72_0.17_155)] group-hover:brightness-125 transition-all shadow-[0_0_10px_-2px] shadow-success/30"
+                />
+                <span className="text-[10px] text-muted-foreground num truncate w-full text-center">
+                  {pt.date}
+                </span>
+              </div>
+            ))}
           </div>
         </section>
       )}
 
-      <section className="ledger-card overflow-x-auto p-4 sm:p-5">
+      {/* Audit Table */}
+      <section className="glass-card overflow-hidden p-5 sm:p-6">
+        <h2 className="text-base font-bold mb-4">Audit Trail Shift</h2>
+
         {shifts.isLoading ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" /> Memuat laporan…
-          </p>
+          <div className="flex min-h-[200px] flex-col items-center justify-center gap-3">
+            <Loader2 className="size-6 animate-spin text-primary" />
+            <p className="text-sm font-medium text-muted-foreground">Memuat audit trail…</p>
+          </div>
         ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Belum ada shift tercatat.</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Belum ada shift tercatat untuk periode ini.
+          </p>
         ) : (
-          <>
-            {/* Desktop table */}
-            <table className="hidden w-full min-w-[1100px] text-sm md:table">
-              <thead className="text-left text-xs tracking-wide text-muted-foreground uppercase">
-                <tr>
-                  <th className="pb-3">Shift</th>
+          <div className="overflow-x-auto hide-scrollbar">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead>
+                <tr className="border-b border-border/60 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                  <th className="pb-3">Shift & Mulai</th>
                   <th className="pb-3">Kasir</th>
-                  <th className="pb-3">Modal awal</th>
-                  <th className="pb-3">Trx</th>
-                  <th className="pb-3">Laba</th>
-                  <th className="pb-3">Ekspektasi</th>
-                  <th className="pb-3">Kas akhir</th>
-                  <th className="pb-3">Selisih</th>
-                  <th className="pb-3">Pengeluaran</th>
-                  <th className="pb-3">Top-up</th>
-                  <th className="pb-3">Setoran</th>
-                  <th className="pb-3">Status</th>
+                  <th className="pb-3 text-right">Modal Awal</th>
+                  <th className="pb-3 text-right">Saldo Fisik</th>
+                  <th className="pb-3 text-right">Selisih (Variance)</th>
+                  <th className="pb-3 text-right">Pengeluaran</th>
+                  <th className="pb-3 text-right">Setoran</th>
+                  <th className="pb-3 text-right">Laba Bersih</th>
+                  <th className="pb-3 text-center">Status</th>
                 </tr>
               </thead>
               <tbody className="num">
-                {rows.map(({ shift, summary, expected, variance, cashier }) => (
-                  <tr key={shift.id} className="border-t border-border">
-                    <td className="py-3">
-                      {new Date(shift.start_time).toLocaleString("id-ID", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      })}
-                    </td>
-                    <td className="py-3">{cashier}</td>
-                    <td className="py-3">{rupiah(shift.initial_physical_balance)}</td>
-                    <td className="py-3">{summary.count}</td>
-                    <td className="py-3 text-success">{rupiah(summary.profit)}</td>
-                    <td className="py-3">{rupiah(expected)}</td>
-                    <td className="py-3">
-                      {shift.final_physical_balance === null
-                        ? "—"
-                        : rupiah(shift.final_physical_balance)}
-                    </td>
-                    <td
-                      className={`py-3 ${
-                        variance === null
-                          ? ""
-                          : variance === 0
-                            ? "text-success"
-                            : "text-destructive"
-                      }`}
+                {rows.map((r) => {
+                  const hasVariance = r.variance !== null && Math.abs(r.variance) > 500;
+                  return (
+                    <tr
+                      key={r.shift.id}
+                      className="border-b border-border/30 transition-colors hover:bg-secondary/30"
                     >
-                      {variance === null ? "—" : rupiah(variance)}
-                    </td>
-                    <td className="py-3">
-                      {num(shift.total_expenses) > 0 ? (
-                        <span className="group relative cursor-default">
-                          {rupiah(shift.total_expenses)}
-                          {shift.expense_notes && (
-                            <span className="pointer-events-none absolute bottom-full left-0 z-10 mb-1 hidden w-48 rounded-lg border border-border bg-popover p-2 text-xs text-popover-foreground shadow-md group-hover:block">
-                              {shift.expense_notes}
-                            </span>
-                          )}
+                      <td className="py-3.5 font-medium">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Clock className="size-3.5 text-muted-foreground" />
+                          <span>
+                            {new Date(r.shift.start_time).toLocaleString("id-ID", {
+                              day: "numeric",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 font-medium">{r.cashier}</td>
+                      <td className="py-3.5 text-right font-medium text-cash">
+                        {rupiah(r.shift.initial_physical_balance)}
+                      </td>
+                      <td className="py-3.5 text-right font-medium">
+                        {r.shift.final_physical_balance !== null
+                          ? rupiah(r.shift.final_physical_balance)
+                          : "—"}
+                      </td>
+                      <td className="py-3.5 text-right">
+                        {r.variance === null ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : hasVariance ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-destructive/15 px-2 py-0.5 text-xs font-bold text-destructive">
+                            <AlertTriangle className="size-3" />
+                            {rupiah(r.variance)}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-success">
+                            <CheckCircle2 className="size-3" /> 0
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3.5 text-right text-destructive">
+                        {rupiah(r.shift.total_expenses)}
+                      </td>
+                      <td className="py-3.5 text-right font-medium text-cash">
+                        {rupiah(r.shift.deposit_amount)}
+                      </td>
+                      <td className="py-3.5 text-right font-bold text-success">
+                        {rupiah(r.summary.profit)}
+                      </td>
+                      <td className="py-3.5 text-center">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                            r.shift.status === "open"
+                              ? "bg-success/15 text-success border border-success/25"
+                              : "bg-secondary text-muted-foreground"
+                          }`}
+                        >
+                          {r.shift.status === "open" ? "Aktif" : "Ditutup"}
                         </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="py-3">
-                      {num(shift.topup_request) > 0 ? rupiah(shift.topup_request) : "—"}
-                    </td>
-                    <td className="py-3">{rupiah(shift.deposit_amount)}</td>
-                    <td className="py-3">
-                      <span
-                        className={
-                          shift.status === "open" ? "text-warning" : "text-muted-foreground"
-                        }
-                      >
-                        {shift.status === "open" ? "Open" : "Closed"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-
-            {/* Mobile cards */}
-            <ul className="space-y-3 md:hidden">
-              {rows.map(({ shift, summary, expected, variance, cashier }) => (
-                <li
-                  key={shift.id}
-                  className="rounded-lg border border-border bg-secondary/30 p-3 text-sm"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{cashier}</span>
-                    <span
-                      className={`num text-xs ${shift.status === "open" ? "text-warning" : "text-muted-foreground"}`}
-                    >
-                      {shift.status === "open" ? "Open" : "Closed"}
-                    </span>
-                  </div>
-                  <p className="num mt-1 text-xs text-muted-foreground">
-                    {new Date(shift.start_time).toLocaleString("id-ID", {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })}
-                  </p>
-                  <div className="num mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Modal</span>
-                      <span>{rupiah(shift.initial_physical_balance)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Trx</span>
-                      <span>{summary.count}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Laba</span>
-                      <span className="text-success">{rupiah(summary.profit)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Ekspektasi</span>
-                      <span>{rupiah(expected)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Kas akhir</span>
-                      <span>
-                        {shift.final_physical_balance === null
-                          ? "—"
-                          : rupiah(shift.final_physical_balance)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Selisih</span>
-                      <span
-                        className={
-                          variance === null
-                            ? ""
-                            : variance === 0
-                              ? "text-success"
-                              : "text-destructive"
-                        }
-                      >
-                        {variance === null ? "—" : rupiah(variance)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Pengeluaran</span>
-                      <span>
-                        {num(shift.total_expenses) > 0 ? rupiah(shift.total_expenses) : "—"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Top-up</span>
-                      <span>
-                        {num(shift.topup_request) > 0 ? rupiah(shift.topup_request) : "—"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Setoran</span>
-                      <span>{rupiah(shift.deposit_amount)}</span>
-                    </div>
-                  </div>
-                  {shift.expense_notes && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Catatan: {shift.expense_notes}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </>
+          </div>
         )}
       </section>
     </div>
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
+function Stat({
+  label,
+  value,
+  icon,
+  gradient,
+  iconBg,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+  gradient: string;
+  iconBg: string;
+}) {
   return (
-    <div className="ledger-card p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`num mt-2 text-base font-semibold ${tone} sm:text-lg`}>{value}</p>
+    <div className="ledger-card glass-card-hover p-5">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <div className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${iconBg}`}>
+          {icon}
+        </div>
+      </div>
+      <p className={`num mt-3 text-xl font-bold sm:text-2xl ${gradient}`}>{value}</p>
     </div>
   );
 }

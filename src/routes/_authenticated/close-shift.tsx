@@ -2,7 +2,19 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, ClipboardCheck, TriangleAlert, CheckCircle2 } from "lucide-react";
+import {
+  Loader2,
+  ClipboardCheck,
+  TriangleAlert,
+  CheckCircle2,
+  Wallet,
+  TrendingUp,
+  CreditCard,
+  Building2,
+  ArrowRight,
+  Sparkles,
+  DollarSign,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -163,17 +175,17 @@ function CloseShift() {
 
   if (isOwner)
     return (
-      <div className="ledger-card max-w-xl p-6">
-        <h1 className="text-lg font-semibold">Owner tidak menjalankan shift</h1>
+      <div className="glass-card max-w-xl p-6 sm:p-8">
+        <h1 className="text-xl font-bold">Owner tidak menjalankan shift</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Buka dan tutup shift hanya dilakukan kasir/teller. Sebagai owner, pantau hasilnya di
           ringkasan dan laporan.
         </p>
-        <div className="mt-5 flex gap-2">
-          <Button asChild variant="secondary">
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Button asChild variant="outline">
             <Link to="/dashboard">Ringkasan owner</Link>
           </Button>
-          <Button asChild variant="secondary">
+          <Button asChild variant="outline">
             <Link to="/reports">Laporan & audit</Link>
           </Button>
         </div>
@@ -182,78 +194,98 @@ function CloseShift() {
 
   if (authLoading || shiftQuery.isLoading)
     return (
-      <p className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" /> Memuat…
-      </p>
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4">
+        <Loader2 className="size-6 animate-spin text-primary" />
+        <p className="text-sm font-medium text-muted-foreground">Memuat data shift…</p>
+      </div>
     );
 
   if (!shiftQuery.data)
     return (
-      <div className="ledger-card p-6">
-        <h1 className="text-lg font-semibold">Tidak ada shift aktif</h1>
+      <div className="glass-card p-6 sm:p-8">
+        <h1 className="text-xl font-bold">Tidak ada shift aktif</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Buka shift terlebih dahulu sebelum melakukan penutupan.
         </p>
-        <Button asChild className="mt-5">
-          <Link to="/dashboard">Ke halaman shift</Link>
+        <Button asChild className="mt-6">
+          <Link to="/dashboard">
+            Ke halaman shift <ArrowRight className="ml-1.5 size-4" />
+          </Link>
         </Button>
       </div>
     );
 
   return (
     <form
-      className="space-y-5 sm:space-y-6"
+      className="space-y-6 sm:space-y-7"
       onSubmit={(e) => {
         e.preventDefault();
         setShowConfirm(true);
       }}
     >
       <div>
-        <h1 className="text-lg font-semibold sm:text-xl">Tutup Shift</h1>
-        <p className="text-sm text-muted-foreground">
-          Validasi fisik, dokumentasi pengeluaran, dan snapshot saldo mesin.
+        <h1 className="flex items-center gap-2.5 text-xl font-bold sm:text-2xl">
+          <div className="flex size-9 items-center justify-center rounded-xl bg-primary/15 shadow-[0_0_15px_-3px] shadow-primary/20">
+            <ClipboardCheck className="size-5 text-primary" />
+          </div>
+          Tutup Shift
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Validasi kas fisik, dokumentasi pengeluaran, dan snapshot saldo mesin.
         </p>
       </div>
 
+      {/* Overview Cards */}
       <div className="responsive-grid-3">
-        <div className="ledger-card p-4">
-          <p className="text-xs text-muted-foreground">Expected balance (sistem)</p>
-          <p className="num mt-2 text-base font-semibold text-cash sm:text-lg">
+        <div className="ledger-card p-5">
+          <p className="text-xs font-medium text-muted-foreground">Expected balance (sistem)</p>
+          <p className="num mt-2 text-xl font-bold gradient-text-gold sm:text-2xl">
             {rupiah(expected)}
           </p>
         </div>
-        <div className="ledger-card p-4">
-          <p className="text-xs text-muted-foreground">Laba bersih shift</p>
-          <p className="num mt-2 text-base font-semibold text-success sm:text-lg">
+        <div className="ledger-card p-5">
+          <p className="text-xs font-medium text-muted-foreground">Laba bersih shift</p>
+          <p className="num mt-2 text-xl font-bold gradient-text-emerald sm:text-2xl">
             {rupiah(summary.profit)}
           </p>
         </div>
-        <div className="ledger-card p-4">
-          <p className="text-xs text-muted-foreground">Piutang belum lunas</p>
-          <p className="num mt-2 text-base font-semibold text-warning sm:text-lg">
+        <div className="ledger-card p-5">
+          <p className="text-xs font-medium text-muted-foreground">Piutang belum lunas</p>
+          <p className="num mt-2 text-xl font-bold text-warning sm:text-2xl">
             {rupiah(pendingDebt)}
           </p>
         </div>
       </div>
 
-      <section className="ledger-card grid gap-3 p-4 sm:grid-cols-2 sm:gap-4 sm:p-5 lg:grid-cols-4">
-        <MoneyInput
-          id="final-cash"
-          label="Saldo Fisik Akhir"
-          value={finalCash}
-          onChange={setFinalCash}
-          required
-        />
-        <MoneyInput
-          id="expenses"
-          label="Pengeluaran operasional"
-          value={expenses}
-          onChange={setExpenses}
-        />
-        <MoneyInput id="topup" label="Permintaan top-up saldo" value={topup} onChange={setTopup} />
-        <MoneyInput id="deposit" label="Setoran ke owner" value={deposit} onChange={setDeposit} />
-        <div className="space-y-1.5 sm:col-span-2 lg:col-span-4">
-          <Label htmlFor="expense-notes" className="text-xs text-muted-foreground">
+      {/* Main Inputs */}
+      <section className="glass-card p-5 sm:p-6 space-y-4">
+        <h2 className="text-base font-bold flex items-center gap-2">
+          <DollarSign className="size-4 text-primary" /> Kas Fisik & Pengeluaran Shift
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <MoneyInput
+            id="final-cash"
+            label="Saldo Fisik Akhir"
+            value={finalCash}
+            onChange={setFinalCash}
+            required
+          />
+          <MoneyInput
+            id="expenses"
+            label="Pengeluaran operasional"
+            value={expenses}
+            onChange={setExpenses}
+          />
+          <MoneyInput
+            id="topup"
+            label="Permintaan top-up saldo"
+            value={topup}
+            onChange={setTopup}
+          />
+          <MoneyInput id="deposit" label="Setoran ke owner" value={deposit} onChange={setDeposit} />
+        </div>
+        <div className="space-y-1.5 pt-2">
+          <Label htmlFor="expense-notes" className="text-xs font-medium text-muted-foreground">
             Rincian pengeluaran (listrik, parkir, bensin, …)
           </Label>
           <Input
@@ -261,36 +293,51 @@ function CloseShift() {
             value={expenseNotes}
             maxLength={300}
             onChange={(e) => setExpenseNotes(e.target.value)}
-            placeholder="Listrik 50.000; parkir 5.000"
+            placeholder="Contoh: Listrik 50.000; parkir 5.000"
+            className="transition-all focus-visible:ring-primary/50"
           />
         </div>
       </section>
 
+      {/* Variance & Validation Badges */}
       {finalCash !== "" &&
         (Math.abs(variance) > 500 ? (
-          <p className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-xs sm:px-4 sm:py-3 sm:text-sm">
-            <TriangleAlert className="size-4 shrink-0 text-destructive" />
+          <div className="flex items-center gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3.5 text-sm backdrop-blur-sm">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-destructive/20">
+              <TriangleAlert className="size-5 text-destructive" />
+            </div>
             <span>
-              Selisih (variance) {rupiah(variance)} antara saldo sistem dan fisik. Periksa transaksi
-              atau pengeluaran sebelum menutup shift.
+              Selisih (variance){" "}
+              <span className="font-bold text-destructive num">{rupiah(variance)}</span> antara
+              saldo sistem dan kas fisik. Periksa transaksi sebelum menutup shift.
             </span>
-          </p>
+          </div>
         ) : (
-          <p className="flex items-center gap-2 rounded-lg border border-success/50 bg-success/10 px-3 py-2.5 text-xs sm:px-4 sm:py-3 sm:text-sm">
-            <CheckCircle2 className="size-4 shrink-0 text-success" /> Saldo fisik cocok dengan
-            sistem.
-          </p>
+          <div className="flex items-center gap-3 rounded-2xl border border-success/40 bg-success/10 px-4 py-3.5 text-sm backdrop-blur-sm">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-success/20">
+              <CheckCircle2 className="size-5 text-success" />
+            </div>
+            <span className="font-medium text-success">
+              Saldo kas fisik cocok sempurna dengan sistem.
+            </span>
+          </div>
         ))}
+
       {depositMismatch && (
-        <p className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-xs sm:px-4 sm:py-3 sm:text-sm">
-          <TriangleAlert className="size-4 shrink-0 text-destructive" />
-          Setoran melebihi saldo fisik akhir.
-        </p>
+        <div className="flex items-center gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3.5 text-sm backdrop-blur-sm">
+          <TriangleAlert className="size-5 shrink-0 text-destructive" />
+          <span className="text-destructive font-medium">
+            Setoran tidak boleh melebihi saldo fisik akhir.
+          </span>
+        </div>
       )}
 
-      <section className="ledger-card p-4 sm:p-5">
-        <h2 className="text-base font-semibold">Detail saldo mesin (Bank)</h2>
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3">
+      {/* Bank Machine Snapshot */}
+      <section className="glass-card p-5 sm:p-6">
+        <h2 className="text-base font-bold flex items-center gap-2">
+          <Building2 className="size-4 text-digital" /> Detail saldo mesin (Bank)
+        </h2>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {BANKS.map((b) => (
             <MoneyInput
               key={b}
@@ -303,8 +350,11 @@ function CloseShift() {
         </div>
       </section>
 
-      <section className="ledger-card p-4 sm:p-5">
-        <h2 className="text-base font-semibold">Detail saldo PPOB</h2>
+      {/* PPOB Snapshot */}
+      <section className="glass-card p-5 sm:p-6">
+        <h2 className="text-base font-bold flex items-center gap-2">
+          <CreditCard className="size-4 text-accent" /> Detail saldo PPOB
+        </h2>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {PPOB_PROVIDERS.map((p) => (
             <MoneyInput
@@ -318,6 +368,7 @@ function CloseShift() {
         </div>
       </section>
 
+      {/* Submit Button */}
       <Button type="submit" size="lg" disabled={close.isPending} className="w-full sm:w-auto">
         {close.isPending ? (
           <Loader2 className="mr-2 size-4 animate-spin" />
@@ -327,9 +378,10 @@ function CloseShift() {
         Tutup shift
       </Button>
 
+      {/* Confirmation Glass Dialog */}
       {showConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
           role="dialog"
           aria-modal="true"
           aria-labelledby="close-shift-confirm-title"
@@ -340,24 +392,26 @@ function CloseShift() {
             if (e.key === "Escape") setShowConfirm(false);
           }}
         >
-          <div className="ledger-card w-full max-w-md p-6 text-center">
-            <ClipboardCheck className="mx-auto size-8 text-primary" />
-            <h2 id="close-shift-confirm-title" className="mt-4 text-lg font-semibold">
+          <div className="glass-card w-full max-w-md p-6 sm:p-8 text-center shadow-2xl border-white/20">
+            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary/20 shadow-[0_0_20px_-3px] shadow-primary/30">
+              <ClipboardCheck className="size-7 text-primary" />
+            </div>
+            <h2 id="close-shift-confirm-title" className="mt-5 font-display text-xl font-bold">
               Konfirmasi Tutup Shift
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Pastikan semua data sudah benar. Shift yang ditutup tidak dapat diubah kecuali oleh
-              owner.
+              Pastikan semua saldo fisik dan snapshot mesin sudah diisi dengan benar. Shift yang
+              ditutup tidak dapat diubah.
             </p>
             {variance !== 0 && (
-              <p className="mt-2 text-sm font-medium text-destructive">
-                Selisih: {rupiah(variance)}
+              <p className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive num">
+                Selisih kas: {rupiah(variance)}
               </p>
             )}
-            <div className="mt-6 flex gap-3">
+            <div className="mt-7 flex gap-3">
               <Button
                 type="button"
-                variant="secondary"
+                variant="outline"
                 className="flex-1"
                 onClick={() => setShowConfirm(false)}
               >

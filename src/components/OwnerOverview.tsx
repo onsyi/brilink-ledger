@@ -1,7 +1,16 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Loader2, ShieldCheck, Users, BarChart3, Building2 } from "lucide-react";
+import {
+  Loader2,
+  ShieldCheck,
+  Users,
+  BarChart3,
+  Building2,
+  TrendingUp,
+  Clock,
+  UserCheck,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { num, rupiah, summarize } from "@/lib/ledger";
@@ -72,8 +81,14 @@ export function OwnerOverview({ username }: { username?: string | null }) {
 
   if (overview.isLoading)
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" /> Memuat ringkasan owner…
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4">
+        <div className="relative">
+          <div className="absolute inset-0 rounded-full bg-primary/20 blur-xl" />
+          <div className="relative flex size-14 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
+            <Loader2 className="size-6 animate-spin text-primary" />
+          </div>
+        </div>
+        <p className="text-sm font-medium text-muted-foreground">Memuat ringkasan owner…</p>
       </div>
     );
 
@@ -81,65 +96,109 @@ export function OwnerOverview({ username }: { username?: string | null }) {
 
   return (
     <div className="space-y-5 sm:space-y-6">
+      {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold sm:text-xl">Dashboard Owner</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-bold sm:text-3xl">Dashboard Owner</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Halo {username ?? "owner"} — pantau shift kasir dan laba.
           </p>
         </div>
         <div className="flex items-center gap-2">
           {branches.data && branches.data.length > 0 && (
-            <select
-              value={branchFilter}
-              onChange={(e) => setBranchFilter(e.target.value)}
-              className="h-8 rounded-lg border border-border bg-secondary px-2 text-xs"
-            >
-              <option value="all">Semua Cabang</option>
-              {branches.data.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <Building2 className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <select
+                value={branchFilter}
+                onChange={(e) => setBranchFilter(e.target.value)}
+                className="h-8 appearance-none rounded-xl border border-border/60 bg-secondary/60 py-1 pl-8 pr-3 text-xs font-medium backdrop-blur-sm transition-colors hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="all">Semua Cabang</option>
+                {branches.data.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
-          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs">
-            <ShieldCheck className="size-3.5 text-primary" /> Mode audit
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary shadow-[0_0_10px_-3px] shadow-primary/20">
+            <ShieldCheck className="size-3.5" /> Mode audit
           </span>
         </div>
       </div>
 
+      {/* KPI Cards */}
       <div className="responsive-grid-3">
-        <Kpi label="Shift aktif sekarang" value={String(d?.open.length ?? 0)} tone="text-cash" />
-        <Kpi label="Laba hari ini" value={rupiah(d?.profitToday ?? 0)} tone="text-success" />
-        <Kpi label="Total kasir" value={String(d?.cashiers ?? 0)} />
+        <Kpi
+          label="Shift aktif sekarang"
+          value={String(d?.open.length ?? 0)}
+          icon={<Clock className="size-5" />}
+          iconBg="bg-[oklch(0.82_0.16_82_/_0.15)]"
+          iconColor="text-cash"
+          gradient="gradient-text-gold"
+        />
+        <Kpi
+          label="Laba hari ini"
+          value={rupiah(d?.profitToday ?? 0)}
+          icon={<TrendingUp className="size-5" />}
+          iconBg="bg-[oklch(0.72_0.17_155_/_0.15)]"
+          iconColor="text-success"
+          gradient="gradient-text-emerald"
+        />
+        <Kpi
+          label="Total kasir"
+          value={String(d?.cashiers ?? 0)}
+          icon={<UserCheck className="size-5" />}
+          iconBg="bg-[oklch(0.72_0.13_205_/_0.15)]"
+          iconColor="text-digital"
+          gradient="gradient-text-cyan"
+        />
       </div>
 
-      <section className="ledger-card p-4 sm:p-5">
-        <h2 className="flex items-center gap-2 text-base font-semibold">
-          <Users className="size-4 text-primary" /> Shift kasir yang sedang berjalan
+      {/* Active Shifts */}
+      <section className="glass-card p-5 sm:p-6">
+        <h2 className="flex items-center gap-2.5 text-lg font-bold">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-primary/12">
+            <Users className="size-4 text-primary" />
+          </div>
+          Shift kasir yang sedang berjalan
         </h2>
         {(d?.open.length ?? 0) === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">
+          <p className="mt-4 rounded-xl border border-border/40 bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
             Tidak ada shift aktif. Kasir dapat membuka shift dari akun masing-masing.
           </p>
         ) : (
-          <ul className="mt-3 space-y-2 sm:mt-4">
+          <ul className="mt-4 space-y-2.5">
             {d?.open.map((r) => (
               <li
                 key={r.shift.id}
-                className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm"
+                className="rounded-xl border border-border/50 bg-secondary/30 px-4 py-3 transition-all hover:border-primary/20 hover:bg-secondary/40"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium">{r.cashier}</span>
-                  <span className="num text-xs text-muted-foreground">
-                    dibuka {new Date(r.shift.start_time).toLocaleString("id-ID")}
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex size-2">
+                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
+                      <span className="relative inline-flex size-2 rounded-full bg-success" />
+                    </span>
+                    <span className="font-semibold">{r.cashier}</span>
+                  </div>
+                  <span className="num inline-flex items-center gap-1.5 rounded-lg bg-secondary/50 px-2 py-0.5 text-[11px] text-muted-foreground">
+                    <Clock className="size-3" />
+                    {new Date(r.shift.start_time).toLocaleString("id-ID")}
                   </span>
                 </div>
-                <div className="num mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground sm:gap-x-4">
-                  <span>modal {rupiah(r.shift.initial_physical_balance)}</span>
-                  <span>{r.summary.count} transaksi</span>
-                  <span className="text-success">laba {rupiah(r.summary.profit)}</span>
+                <div className="num mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                  <span className="text-muted-foreground">
+                    Modal{" "}
+                    <span className="font-semibold text-cash">
+                      {rupiah(r.shift.initial_physical_balance)}
+                    </span>
+                  </span>
+                  <span className="text-muted-foreground">{r.summary.count} transaksi</span>
+                  <span className="font-semibold text-success">
+                    Laba {rupiah(r.summary.profit)}
+                  </span>
                 </div>
               </li>
             ))}
@@ -147,36 +206,60 @@ export function OwnerOverview({ username }: { username?: string | null }) {
         )}
       </section>
 
-      <section className="ledger-card p-4 sm:p-5">
-        <h2 className="text-base font-semibold">Riwayat shift terakhir</h2>
-        <div className="mt-4 overflow-x-auto">
+      {/* Shift History Table */}
+      <section className="glass-card p-5 sm:p-6">
+        <h2 className="text-lg font-bold">Riwayat shift terakhir</h2>
+        <div className="mt-4 overflow-x-auto hide-scrollbar">
           <table className="w-full min-w-[500px] text-sm">
-            <thead className="text-xs text-muted-foreground uppercase">
-              <tr>
-                <th className="py-2 text-left">Kasir</th>
-                <th className="py-2 text-left">Mulai</th>
-                <th className="py-2 text-right">Transaksi</th>
-                <th className="py-2 text-right">Laba</th>
-                <th className="py-2 text-right">Status</th>
+            <thead>
+              <tr className="border-b border-border/60">
+                <th className="pb-3 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                  Kasir
+                </th>
+                <th className="pb-3 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                  Mulai
+                </th>
+                <th className="pb-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                  Transaksi
+                </th>
+                <th className="pb-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                  Laba
+                </th>
+                <th className="pb-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                  Status
+                </th>
               </tr>
             </thead>
             <tbody className="num">
               {(d?.rows ?? []).slice(0, 10).map((r) => (
-                <tr key={r.shift.id} className="border-t border-border">
-                  <td className="py-2 text-left">{r.cashier}</td>
-                  <td className="py-2 text-left">
+                <tr
+                  key={r.shift.id}
+                  className="border-b border-border/30 transition-colors hover:bg-secondary/20"
+                >
+                  <td className="py-3 text-left font-medium">{r.cashier}</td>
+                  <td className="py-3 text-left text-muted-foreground">
                     {new Date(r.shift.start_time).toLocaleDateString("id-ID")}
                   </td>
-                  <td className="py-2 text-right">{r.summary.count}</td>
-                  <td className="py-2 text-right text-success">{rupiah(r.summary.profit)}</td>
-                  <td className="py-2 text-right">
-                    {r.shift.status === "open" ? "Berjalan" : "Ditutup"}
+                  <td className="py-3 text-right">{r.summary.count}</td>
+                  <td className="py-3 text-right font-semibold text-success">
+                    {rupiah(r.summary.profit)}
+                  </td>
+                  <td className="py-3 text-right">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        r.shift.status === "open"
+                          ? "bg-success/15 text-success"
+                          : "bg-muted/60 text-muted-foreground"
+                      }`}
+                    >
+                      {r.shift.status === "open" ? "Berjalan" : "Ditutup"}
+                    </span>
                   </td>
                 </tr>
               ))}
               {(d?.rows ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-3 text-muted-foreground">
+                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
                     Belum ada shift tercatat.
                   </td>
                 </tr>
@@ -184,10 +267,10 @@ export function OwnerOverview({ username }: { username?: string | null }) {
             </tbody>
           </table>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2 sm:mt-5">
-          <Button asChild variant="secondary" size="sm">
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm">
             <Link to="/reports">
-              <BarChart3 className="mr-1 size-4" /> Laporan & audit
+              <BarChart3 className="mr-1.5 size-4" /> Laporan & audit
             </Link>
           </Button>
         </div>
@@ -196,11 +279,30 @@ export function OwnerOverview({ username }: { username?: string | null }) {
   );
 }
 
-function Kpi({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function Kpi({
+  label,
+  value,
+  icon,
+  iconBg,
+  iconColor,
+  gradient,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+  iconBg: string;
+  iconColor: string;
+  gradient: string;
+}) {
   return (
-    <div className="ledger-card p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`num mt-2 text-lg font-semibold ${tone ?? "text-foreground"}`}>{value}</p>
+    <div className="ledger-card glass-card-hover p-5">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <div className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${iconBg}`}>
+          <span className={iconColor}>{icon}</span>
+        </div>
+      </div>
+      <p className={`num mt-3 text-xl font-bold sm:text-2xl ${gradient}`}>{value}</p>
     </div>
   );
 }

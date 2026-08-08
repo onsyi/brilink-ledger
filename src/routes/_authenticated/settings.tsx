@@ -90,11 +90,10 @@ function SettingsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("branches")
-        .select("id, name")
-        .eq("is_active", true)
+        .select("id, name, is_active")
         .order("name");
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as { id: string; name: string; is_active: boolean }[];
     },
   });
 
@@ -125,7 +124,11 @@ function SettingsPage() {
   const fetchUsers = useCallback(async () => {
     if (!isOwner) return;
     setLoadingUsers(true);
-    const [{ data: profiles, error: profilesErr }, { data: roles }, { data: branchRows, error: branchErr }] = await Promise.all([
+    const [
+      { data: profiles, error: profilesErr },
+      { data: roles },
+      { data: branchRows, error: branchErr },
+    ] = await Promise.all([
       supabase.from("profiles").select("*"),
       supabase.from("user_roles").select("user_id, role"),
       supabase.from("branches").select("id, name"),
@@ -531,11 +534,7 @@ function SettingsPage() {
                         </Button>
                       )}
                       {u.role !== "owner" && (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => setDeleteUser(u)}
-                        >
+                        <Button size="sm" variant="destructive" onClick={() => setDeleteUser(u)}>
                           Hapus
                         </Button>
                       )}
