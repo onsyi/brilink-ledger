@@ -320,6 +320,17 @@ export type Database = {
         };
         Returns: void;
       };
+      admin_list_users: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          email: string;
+          username: string;
+          full_name: string | null;
+          created_at: string;
+          branch_id: string | null;
+        }[];
+      };
       admin_create_user: {
         Args: {
           target_email: string;

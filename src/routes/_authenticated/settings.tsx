@@ -129,15 +129,15 @@ function SettingsPage() {
     if (!isOwner) return;
     setLoadingUsers(true);
     const [
-      { data: profiles, error: profilesErr },
+      { data: userList, error: usersErr },
       { data: roles },
       { data: branchRows, error: branchErr },
     ] = await Promise.all([
-      supabase.from("profiles").select("id, username, full_name, created_at, branch_id"),
+      supabase.rpc("admin_list_users"),
       supabase.from("user_roles").select("user_id, role"),
       supabase.from("branches").select("id, name"),
     ]);
-    if (profilesErr) {
+    if (usersErr) {
       toast.error("Gagal memuat daftar pengguna");
       setLoadingUsers(false);
       return;
@@ -145,7 +145,7 @@ function SettingsPage() {
     if (branchErr) {
       console.warn("[Settings] Failed to load branches:", branchErr.message);
     }
-    if (profiles && roles) {
+    if (userList && roles) {
       const roleMap = new Map<string, AppRole>();
       roles.forEach((r) => {
         if (!roleMap.has(r.user_id)) {
@@ -154,10 +154,15 @@ function SettingsPage() {
       });
       const branchMap = new Map<string, string>();
       (branchRows ?? []).forEach((b) => branchMap.set(b.id, b.name));
-      const merged: UserProfile[] = profiles.map((p) => ({
-        ...p,
-        role: roleMap.get(p.id) ?? "cashier",
-        branch_name: p.branch_id ? (branchMap.get(p.branch_id) ?? null) : null,
+      const merged: UserProfile[] = userList.map((u) => ({
+        id: u.id,
+        username: u.username,
+        full_name: u.full_name,
+        created_at: u.created_at,
+        email: u.email ?? "",
+        branch_id: u.branch_id,
+        branch_name: u.branch_id ? (branchMap.get(u.branch_id) ?? null) : null,
+        role: roleMap.get(u.id) ?? "cashier",
       }));
       setUsers(merged);
     }
@@ -665,7 +670,7 @@ function SettingsPage() {
           <DialogHeader>
             <DialogTitle>Edit Kasir</DialogTitle>
             <DialogDescription>
-              Ubah informasi akun kasir. Email tidak dapat diubah dari sini.
+              Ubah informasi akun kasir: email, username, dan nama lengkap.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">

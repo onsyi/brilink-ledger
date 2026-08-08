@@ -176,15 +176,21 @@ function Deposits() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="deposit-confirm-title"
           onClick={(e) => {
             if (e.target === e.currentTarget) setConfirmId(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setConfirmId(null);
           }}
         >
           <div className="glass-card w-full max-w-md p-6 text-center">
             <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-success/20 shadow-[0_0_20px_-3px] shadow-success/30">
               <ShieldCheck className="size-7 text-success" />
             </div>
-            <h2 className="mt-5 font-display text-xl font-bold">Konfirmasi Penerimaan Setoran</h2>
+            <h2 id="deposit-confirm-title" className="mt-5 font-display text-xl font-bold">
+              Konfirmasi Penerimaan Setoran
+            </h2>
             <p className="mt-2 text-sm text-muted-foreground">
               Apakah Anda telah menerima uang fisik sebesar:
             </p>
