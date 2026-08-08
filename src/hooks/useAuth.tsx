@@ -93,7 +93,10 @@ export function useAuth(): AuthState {
       }
     };
 
-    supabase.auth.getSession().then(({ data }) => void hydrate(data.session));
+    supabase.auth.getSession().then(
+      ({ data }) => void hydrate(data.session),
+      () => void hydrate(null),
+    );
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       void hydrate(session);
     });

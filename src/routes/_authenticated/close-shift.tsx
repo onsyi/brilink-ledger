@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/MoneyInput";
 import { BANKS, PPOB_PROVIDERS, expectedCash, num, rupiah, summarize } from "@/lib/ledger";
+import { QueryError } from "@/components/QueryError";
 
 export const Route = createFileRoute("/_authenticated/close-shift")({
   head: () => ({
@@ -200,6 +201,16 @@ function CloseShift() {
       </div>
     );
 
+  if (shiftQuery.isError)
+    return (
+      <div className="glass-card p-6 sm:p-8">
+        <QueryError
+          message="Gagal memuat shift aktif. Periksa koneksi Anda."
+          onRetry={() => shiftQuery.refetch()}
+        />
+      </div>
+    );
+
   if (!shiftQuery.data)
     return (
       <div className="glass-card p-6 sm:p-8">
@@ -256,6 +267,27 @@ function CloseShift() {
           </p>
         </div>
       </div>
+
+      {/* Data Load Errors */}
+      {(txns.isError || pendingReceivables.isError) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm backdrop-blur-sm">
+          <TriangleAlert className="size-5 shrink-0 text-destructive" />
+          <span className="text-muted-foreground">
+            Gagal memuat sebagian data shift. Angka di atas mungkin tidak akurat.
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            onClick={() => {
+              txns.refetch();
+              pendingReceivables.refetch();
+            }}
+          >
+            Coba lagi
+          </Button>
+        </div>
+      )}
 
       {/* Main Inputs */}
       <section className="glass-card p-5 sm:p-6 space-y-4">

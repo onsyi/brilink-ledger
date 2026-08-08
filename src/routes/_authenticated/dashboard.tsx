@@ -14,6 +14,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   CreditCard,
+  TriangleAlert,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,6 +23,7 @@ import { MoneyInput } from "@/components/MoneyInput";
 import { OwnerOverview } from "@/components/OwnerOverview";
 import { expectedCash, num, rupiah, summarize } from "@/lib/ledger";
 import { isOnline } from "@/lib/offline-db";
+import { QueryError } from "@/components/QueryError";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -56,6 +58,7 @@ function Dashboard() {
 
   if (loading) return <LoadingBlock />;
   if (isOwner) return <OwnerOverview username={username} />;
+  if (shiftQuery.isError) return <QueryError onRetry={() => shiftQuery.refetch()} />;
   if (shiftQuery.isLoading) return <LoadingBlock />;
   if (!shiftQuery.data) return <OpenShiftPanel userId={userId} branchId={branchId} />;
   return <ActiveShiftPanel shiftId={shiftQuery.data.id} shift={shiftQuery.data} />;
@@ -191,7 +194,9 @@ function OpenShiftPanel({
             </p>
           </div>
         </div>
-        {lastShift.isLoading ? (
+        {lastShift.isError ? (
+          <QueryError onRetry={() => lastShift.refetch()} />
+        ) : lastShift.isLoading ? (
           <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> Memuat…
           </div>
@@ -329,6 +334,27 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
           <span className="text-muted-foreground">
             Mode offline — transaksi akan disinkron otomatis saat koneksi pulih.
           </span>
+        </div>
+      )}
+
+      {/* Data Load Errors */}
+      {(txns.isError || pendingReceivables.isError) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm backdrop-blur-sm">
+          <TriangleAlert className="size-5 shrink-0 text-destructive" />
+          <span className="text-muted-foreground">
+            Gagal memuat sebagian data shift. Angka di bawah mungkin tidak akurat.
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            onClick={() => {
+              txns.refetch();
+              pendingReceivables.refetch();
+            }}
+          >
+            Coba lagi
+          </Button>
         </div>
       )}
 

@@ -14,6 +14,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { num, rupiah, summarize } from "@/lib/ledger";
+import { QueryError } from "@/components/QueryError";
 
 export function OwnerOverview({ username }: { username?: string | null }) {
   const [branchFilter, setBranchFilter] = useState<string>("all");
@@ -78,6 +79,13 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       };
     },
   });
+
+  if (overview.isError)
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <QueryError onRetry={() => overview.refetch()} />
+      </div>
+    );
 
   if (overview.isLoading)
     return (

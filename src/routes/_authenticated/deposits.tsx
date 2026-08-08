@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { num, rupiah } from "@/lib/ledger";
+import { QueryError } from "@/components/QueryError";
 
 export const Route = createFileRoute("/_authenticated/deposits")({
   head: () => ({
@@ -118,7 +119,9 @@ function Deposits() {
       <section className="glass-card p-5 sm:p-6">
         <h2 className="text-base font-bold mb-4">Daftar Setoran Uang Fisik</h2>
 
-        {shifts.isLoading ? (
+        {shifts.isError ? (
+          <QueryError onRetry={() => shifts.refetch()} />
+        ) : shifts.isLoading ? (
           <div className="flex min-h-[160px] flex-col items-center justify-center gap-3">
             <Loader2 className="size-6 animate-spin text-primary" />
             <p className="text-sm font-medium text-muted-foreground">Memuat data setoran…</p>

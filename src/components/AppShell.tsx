@@ -122,7 +122,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await queryClient.cancelQueries();
     queryClient.clear();
-    clearPending();
+    try {
+      await clearPending();
+    } catch {
+      // IndexedDB may be unavailable; ignore during sign-out.
+    }
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
   };

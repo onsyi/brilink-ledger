@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { expectedCash, num, rupiah, summarize } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
+import { QueryError } from "@/components/QueryError";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({
@@ -323,7 +324,9 @@ function Reports() {
       <section className="glass-card overflow-hidden p-5 sm:p-6">
         <h2 className="text-base font-bold mb-4">Audit Trail Shift</h2>
 
-        {shifts.isLoading ? (
+        {shifts.isError ? (
+          <QueryError onRetry={() => shifts.refetch()} />
+        ) : shifts.isLoading ? (
           <div className="flex min-h-[200px] flex-col items-center justify-center gap-3">
             <Loader2 className="size-6 animate-spin text-primary" />
             <p className="text-sm font-medium text-muted-foreground">Memuat audit trail…</p>
