@@ -180,7 +180,7 @@ function Deposits() {
             if (e.target === e.currentTarget) setConfirmId(null);
           }}
         >
-          <div className="glass-card w-full max-w-md p-6 text-center border-white/20">
+          <div className="glass-card w-full max-w-md p-6 text-center">
             <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-success/20 shadow-[0_0_20px_-3px] shadow-success/30">
               <ShieldCheck className="size-7 text-success" />
             </div>

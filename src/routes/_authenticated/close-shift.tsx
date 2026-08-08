@@ -392,7 +392,7 @@ function CloseShift() {
             if (e.key === "Escape") setShowConfirm(false);
           }}
         >
-          <div className="glass-card w-full max-w-md p-6 sm:p-8 text-center shadow-2xl border-white/20">
+          <div className="glass-card w-full max-w-md p-6 sm:p-8 text-center shadow-2xl">
             <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary/20 shadow-[0_0_20px_-3px] shadow-primary/30">
               <ClipboardCheck className="size-7 text-primary" />
             </div>

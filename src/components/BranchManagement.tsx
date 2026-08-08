@@ -193,7 +193,7 @@ export function BranchManagement() {
       {editBranch && <BranchForm branch={editBranch} onClose={() => setEditBranch(null)} />}
       {deleteBranch && (
         <Dialog open onOpenChange={() => setDeleteBranch(null)}>
-          <DialogContent className="glass-card border-white/20">
+          <DialogContent className="glass-card">
             <DialogHeader>
               <DialogTitle className="font-display text-xl font-bold">Hapus Cabang</DialogTitle>
               <DialogDescription>
@@ -262,7 +262,7 @@ function BranchForm({ branch, onClose }: { branch?: Branch; onClose: () => void 
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="glass-card border-white/20">
+      <DialogContent className="glass-card">
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-bold">
             {branch ? "Edit Cabang" : "Tambah Cabang Baru"}

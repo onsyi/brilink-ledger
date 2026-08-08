@@ -14,7 +14,7 @@ const variants = {
     "bg-secondary/90 border border-border/80 text-secondary-foreground shadow-sm hover:bg-secondary hover:border-primary/30 active:scale-[0.98] transition-all",
   ghost: "hover:bg-secondary/70 hover:text-foreground active:scale-[0.98] transition-all",
   glass:
-    "bg-secondary/40 border border-white/10 backdrop-blur-md text-foreground hover:bg-secondary/70 hover:border-white/20 active:scale-[0.98] transition-all",
+    "bg-secondary/40 border border-border/40 backdrop-blur-md text-foreground hover:bg-secondary/70 hover:border-border/60 active:scale-[0.98] transition-all",
   link: "text-primary underline-offset-4 hover:underline",
 } as const;
 

@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSessionTimeout } from "@/hooks/useSessionTimeout";
 import { SessionTimeoutDialog } from "@/components/SessionTimeoutDialog";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getAllPending, isOnline, clearPending } from "@/lib/offline-db";
@@ -145,7 +146,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       {/* Desktop header */}
-      <header className="sticky top-0 z-20 hidden border-b border-white/[0.06] bg-background/70 backdrop-blur-xl md:block">
+      <header className="sticky top-0 z-20 hidden border-b border-border/40 bg-background/70 backdrop-blur-xl md:block">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-4 py-3 lg:px-6">
           <Link to="/" className="shrink-0 font-display text-lg font-bold tracking-tight">
             Kasir<span className="gradient-text-gold">BRILink</span>
@@ -170,6 +171,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <div className="ml-auto flex items-center gap-3">
             <OfflineBadge />
+            <ThemeToggle />
             <div className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-secondary/50 px-3 py-1.5 backdrop-blur-sm">
               <div className="flex size-7 items-center justify-center rounded-lg bg-primary/15">
                 {isOwner ? (
@@ -197,13 +199,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       {/* Mobile top bar */}
-      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-background/70 backdrop-blur-xl md:hidden">
+      <header className="sticky top-0 z-20 border-b border-border/40 bg-background/70 backdrop-blur-xl md:hidden">
         <div className="flex items-center justify-between px-4 py-3">
           <Link to="/" className="font-display text-lg font-bold tracking-tight">
             Kasir<span className="gradient-text-gold">BRILink</span>
           </Link>
           <div className="flex items-center gap-2">
             <OfflineBadge />
+            <ThemeToggle />
             <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-secondary/50 px-2.5 py-1 text-[11px] font-medium text-muted-foreground backdrop-blur-sm">
               {isOwner ? (
                 <ShieldCheck className="size-3 text-primary" />
