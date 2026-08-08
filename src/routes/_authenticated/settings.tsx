@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BranchManagement } from "@/components/BranchManagement";
+import { QueryError } from "@/components/QueryError";
 
 import {
   Dialog,
@@ -55,6 +56,7 @@ function SettingsPage() {
 
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
 
   const [showAddCashier, setShowAddCashier] = useState(false);
   const [newEmail, setNewEmail] = useState("");
@@ -128,6 +130,7 @@ function SettingsPage() {
   const fetchUsers = useCallback(async () => {
     if (!isOwner) return;
     setLoadingUsers(true);
+    setUsersError(null);
     const [
       { data: userList, error: usersErr },
       { data: roles },
@@ -138,7 +141,7 @@ function SettingsPage() {
       supabase.from("branches").select("id, name"),
     ]);
     if (usersErr) {
-      toast.error("Gagal memuat daftar pengguna");
+      setUsersError(usersErr.message);
       setLoadingUsers(false);
       return;
     }
@@ -452,6 +455,8 @@ function SettingsPage() {
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="size-5 animate-spin text-muted-foreground" />
               </div>
+            ) : usersError ? (
+              <QueryError message="Gagal memuat daftar pengguna." onRetry={() => fetchUsers()} />
             ) : users.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
                 Belum ada pengguna terdaftar.
