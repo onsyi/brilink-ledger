@@ -1,13 +1,31 @@
 -- ============================================
--- BRILink Ledger - Complete Database Schema
--- Jalankan di Supabase Dashboard > SQL Editor
+-- BRILink Ledger - Consolidated Initial Schema
+-- Combines the previously duplicated initial migrations into one
+-- idempotent migration. Safe to run on a fresh project or re-run.
+-- Replaces: 20260804002342 / 20260804002427 / 20260805000000
+-- and folds in the advisory-lock fix from 20260807000000.
 -- ============================================
 
--- Enums
-CREATE TYPE public.app_role AS ENUM ('owner','cashier');
-CREATE TYPE public.shift_status AS ENUM ('open','closed');
-CREATE TYPE public.receivable_status AS ENUM ('pending','paid');
-CREATE TYPE public.txn_type AS ENUM ('tarik_tunai','setor_tunai','transfer','ppob');
+-- Enums (idempotent)
+DO $$ BEGIN
+  CREATE TYPE public.app_role AS ENUM ('owner','cashier');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE public.shift_status AS ENUM ('open','closed');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE public.receivable_status AS ENUM ('pending','paid');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE public.txn_type AS ENUM ('tarik_tunai','setor_tunai','transfer','ppob');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Profiles
 CREATE TABLE IF NOT EXISTS public.profiles (
@@ -39,23 +57,28 @@ RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS
 $$;
 
 -- RLS Policies: profiles
+DROP POLICY IF EXISTS "profiles_select_own_or_owner" ON public.profiles;
 CREATE POLICY "profiles_select_own_or_owner" ON public.profiles FOR SELECT TO authenticated
   USING (id = auth.uid() OR public.has_role(auth.uid(),'owner'));
+DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
 CREATE POLICY "profiles_update_own" ON public.profiles FOR UPDATE TO authenticated
   USING (id = auth.uid() OR public.has_role(auth.uid(),'owner'))
   WITH CHECK (id = auth.uid() OR public.has_role(auth.uid(),'owner'));
 
 -- RLS Policies: user_roles
+DROP POLICY IF EXISTS "roles_select_own_or_owner" ON public.user_roles;
 CREATE POLICY "roles_select_own_or_owner" ON public.user_roles FOR SELECT TO authenticated
   USING (user_id = auth.uid() OR public.has_role(auth.uid(),'owner'));
 
--- Auto-create profile + role on signup
+-- Auto-create profile + role on signup (with advisory lock to avoid first-user race)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE first_user BOOLEAN;
 BEGIN
   INSERT INTO public.profiles (id, username, full_name)
   VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email,'@',1)), NEW.raw_user_meta_data->>'full_name');
+
+  PERFORM pg_advisory_xact_lock(hashtext('brilink_first_user'));
 
   SELECT NOT EXISTS (SELECT 1 FROM public.user_roles) INTO first_user;
   INSERT INTO public.user_roles (user_id, role)
@@ -88,13 +111,17 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.shifts TO authenticated;
 GRANT ALL ON public.shifts TO service_role;
 ALTER TABLE public.shifts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "shifts_select" ON public.shifts;
 CREATE POLICY "shifts_select" ON public.shifts FOR SELECT TO authenticated
   USING (user_id = auth.uid() OR public.has_role(auth.uid(),'owner'));
+DROP POLICY IF EXISTS "shifts_insert" ON public.shifts;
 CREATE POLICY "shifts_insert" ON public.shifts FOR INSERT TO authenticated
   WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "shifts_update" ON public.shifts;
 CREATE POLICY "shifts_update" ON public.shifts FOR UPDATE TO authenticated
   USING ((user_id = auth.uid() AND status = 'open') OR public.has_role(auth.uid(),'owner'))
   WITH CHECK (user_id = auth.uid() OR public.has_role(auth.uid(),'owner'));
+DROP POLICY IF EXISTS "shifts_delete_owner" ON public.shifts;
 CREATE POLICY "shifts_delete_owner" ON public.shifts FOR DELETE TO authenticated
   USING (public.has_role(auth.uid(),'owner'));
 
@@ -138,9 +165,13 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.transactions TO authenticated;
 GRANT ALL ON public.transactions TO service_role;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "txn_select" ON public.transactions;
 CREATE POLICY "txn_select" ON public.transactions FOR SELECT TO authenticated USING (public.shift_is_readable(shift_id));
+DROP POLICY IF EXISTS "txn_insert" ON public.transactions;
 CREATE POLICY "txn_insert" ON public.transactions FOR INSERT TO authenticated WITH CHECK (public.shift_is_writable(shift_id));
+DROP POLICY IF EXISTS "txn_update" ON public.transactions;
 CREATE POLICY "txn_update" ON public.transactions FOR UPDATE TO authenticated USING (public.shift_is_writable(shift_id)) WITH CHECK (public.shift_is_writable(shift_id));
+DROP POLICY IF EXISTS "txn_delete" ON public.transactions;
 CREATE POLICY "txn_delete" ON public.transactions FOR DELETE TO authenticated USING (public.shift_is_writable(shift_id));
 
 -- Bank Balances
@@ -155,9 +186,13 @@ CREATE TABLE IF NOT EXISTS public.bank_balances (
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.bank_balances TO authenticated;
 GRANT ALL ON public.bank_balances TO service_role;
 ALTER TABLE public.bank_balances ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "bank_select" ON public.bank_balances;
 CREATE POLICY "bank_select" ON public.bank_balances FOR SELECT TO authenticated USING (public.shift_is_readable(shift_id));
+DROP POLICY IF EXISTS "bank_insert" ON public.bank_balances;
 CREATE POLICY "bank_insert" ON public.bank_balances FOR INSERT TO authenticated WITH CHECK (public.shift_is_writable(shift_id));
+DROP POLICY IF EXISTS "bank_update" ON public.bank_balances;
 CREATE POLICY "bank_update" ON public.bank_balances FOR UPDATE TO authenticated USING (public.shift_is_writable(shift_id)) WITH CHECK (public.shift_is_writable(shift_id));
+DROP POLICY IF EXISTS "bank_delete" ON public.bank_balances;
 CREATE POLICY "bank_delete" ON public.bank_balances FOR DELETE TO authenticated USING (public.shift_is_writable(shift_id));
 
 -- PPOB Balances
@@ -172,9 +207,13 @@ CREATE TABLE IF NOT EXISTS public.ppob_balances (
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.ppob_balances TO authenticated;
 GRANT ALL ON public.ppob_balances TO service_role;
 ALTER TABLE public.ppob_balances ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "ppob_select" ON public.ppob_balances;
 CREATE POLICY "ppob_select" ON public.ppob_balances FOR SELECT TO authenticated USING (public.shift_is_readable(shift_id));
+DROP POLICY IF EXISTS "ppob_insert" ON public.ppob_balances;
 CREATE POLICY "ppob_insert" ON public.ppob_balances FOR INSERT TO authenticated WITH CHECK (public.shift_is_writable(shift_id));
+DROP POLICY IF EXISTS "ppob_update" ON public.ppob_balances;
 CREATE POLICY "ppob_update" ON public.ppob_balances FOR UPDATE TO authenticated USING (public.shift_is_writable(shift_id)) WITH CHECK (public.shift_is_writable(shift_id));
+DROP POLICY IF EXISTS "ppob_delete" ON public.ppob_balances;
 CREATE POLICY "ppob_delete" ON public.ppob_balances FOR DELETE TO authenticated USING (public.shift_is_writable(shift_id));
 
 -- Receivables
@@ -193,13 +232,38 @@ CREATE INDEX IF NOT EXISTS receivables_shift_idx ON public.receivables (shift_id
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.receivables TO authenticated;
 GRANT ALL ON public.receivables TO service_role;
 ALTER TABLE public.receivables ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "recv_select" ON public.receivables;
 CREATE POLICY "recv_select" ON public.receivables FOR SELECT TO authenticated USING (public.shift_is_readable(shift_id));
+DROP POLICY IF EXISTS "recv_insert" ON public.receivables;
 CREATE POLICY "recv_insert" ON public.receivables FOR INSERT TO authenticated WITH CHECK (public.shift_is_writable(shift_id));
+DROP POLICY IF EXISTS "recv_update" ON public.receivables;
 CREATE POLICY "recv_update" ON public.receivables FOR UPDATE TO authenticated
   USING (public.shift_is_readable(shift_id)) WITH CHECK (public.shift_is_readable(shift_id));
+DROP POLICY IF EXISTS "recv_delete_owner" ON public.receivables;
 CREATE POLICY "recv_delete_owner" ON public.receivables FOR DELETE TO authenticated USING (public.has_role(auth.uid(),'owner'));
 
--- Enable Realtime (optional)
-ALTER PUBLICATION supabase_realtime ADD TABLE public.shifts;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.transactions;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.receivables;
+-- Restrict helper-function access to authenticated only
+REVOKE ALL ON FUNCTION public.has_role(uuid, public.app_role) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.shift_is_writable(uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.shift_is_readable(uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.shift_is_writable(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.shift_is_readable(uuid) TO authenticated, service_role;
+
+-- Enable Realtime (idempotent)
+DO $$
+DECLARE
+  tbl text;
+BEGIN
+  FOREACH tbl IN ARRAY ARRAY['shifts','transactions','receivables'] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime'
+        AND schemaname = 'public'
+        AND tablename = tbl
+    ) THEN
+      EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
+    END IF;
+  END LOOP;
+END $$;

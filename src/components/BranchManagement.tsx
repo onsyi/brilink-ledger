@@ -33,7 +33,10 @@ export function BranchManagement() {
   const branches = useQuery({
     queryKey: ["branches"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("branches").select("*").order("name");
+      const { data, error } = await supabase
+        .from("branches")
+        .select("id, name, address, is_active, created_at")
+        .order("name");
       if (error) throw error;
       return (data ?? []) as Branch[];
     },

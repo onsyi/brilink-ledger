@@ -1,10 +1,11 @@
 import "./styles.css";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,10 +38,17 @@ function OfflineSyncProvider({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RealtimeRefresh() {
+  const queryClient = useQueryClient();
+  useRealtimeRefresh(queryClient);
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <OfflineSyncProvider>
+        <RealtimeRefresh />
         <RouterProvider router={router} />
         <Toaster richColors position="top-center" />
       </OfflineSyncProvider>

@@ -19,11 +19,13 @@ ALTER TABLE public.shifts
 ALTER TABLE public.branches ENABLE ROW LEVEL SECURITY;
 
 -- Owner full access
+DROP POLICY IF EXISTS "Owner can manage branches" ON public.branches;
 CREATE POLICY "Owner can manage branches"
   ON public.branches FOR ALL
   USING (public.has_role(auth.uid(), 'owner'::public.app_role));
 
 -- Cashiers can read active branches
+DROP POLICY IF EXISTS "Cashiers can view active branches" ON public.branches;
 CREATE POLICY "Cashiers can view active branches"
   ON public.branches FOR SELECT
   USING (

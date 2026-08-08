@@ -99,7 +99,11 @@ function SettingsPage() {
 
   const fetchProfile = useCallback(async () => {
     if (!user) return;
-    const { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, username, full_name, created_at")
+      .eq("id", user.id)
+      .single();
     if (error) {
       toast.error("Gagal memuat profil");
       setLoading(false);
@@ -129,7 +133,7 @@ function SettingsPage() {
       { data: roles },
       { data: branchRows, error: branchErr },
     ] = await Promise.all([
-      supabase.from("profiles").select("*"),
+      supabase.from("profiles").select("id, username, full_name, created_at, branch_id"),
       supabase.from("user_roles").select("user_id, role"),
       supabase.from("branches").select("id, name"),
     ]);
