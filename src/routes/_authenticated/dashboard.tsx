@@ -6,7 +6,6 @@ import {
   PlayCircle,
   Loader2,
   ArrowRight,
-  WifiOff,
   Wallet,
   TrendingUp,
   Receipt,
@@ -22,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { MoneyInput } from "@/components/MoneyInput";
 import { OwnerOverview } from "@/components/OwnerOverview";
 import { expectedCash, num, rupiah, summarize } from "@/lib/ledger";
-import { isOnline } from "@/lib/offline-db";
 import { QueryError } from "@/components/QueryError";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -324,18 +322,6 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
           </Link>
         </Button>
       </div>
-
-      {/* Offline Warning */}
-      {!isOnline() && (
-        <div className="flex items-center gap-3 rounded-xl border border-warning/40 bg-warning/8 px-4 py-3 text-sm backdrop-blur-sm">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-warning/15">
-            <WifiOff className="size-4 text-warning" />
-          </div>
-          <span className="text-muted-foreground">
-            Mode offline — transaksi akan disinkron otomatis saat koneksi pulih.
-          </span>
-        </div>
-      )}
 
       {/* Data Load Errors */}
       {(txns.isError || pendingReceivables.isError) && (

@@ -36,10 +36,11 @@ function Deposits() {
       let query = supabase
         .from("shifts")
         .select(
-          "id, user_id, start_time, end_time, final_physical_balance, deposit_amount, profiles!shifts_user_id_fkey(username)",
+          "id, user_id, start_time, end_time, final_physical_balance, deposit_amount, deposit_confirmed, profiles!shifts_user_id_fkey(username)",
         )
         .eq("status", "closed")
-        .not("deposit_amount", "eq", 0)
+        .gt("deposit_amount", 0)
+        .eq("deposit_confirmed", false)
         .order("end_time", { ascending: false })
         .limit(60);
 
@@ -57,9 +58,9 @@ function Deposits() {
     mutationFn: async (shiftId: string) => {
       const { error } = await supabase
         .from("shifts")
-        .update({ deposit_amount: 0 })
+        .update({ deposit_confirmed: true })
         .eq("id", shiftId)
-        .not("deposit_amount", "eq", 0);
+        .eq("deposit_confirmed", false);
       if (error) throw error;
     },
     onSuccess: () => {

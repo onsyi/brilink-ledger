@@ -184,6 +184,7 @@ export type Database = {
           branch_id: string | null;
           created_at: string;
           deposit_amount: number;
+          deposit_confirmed: boolean;
           end_time: string | null;
           expense_notes: string | null;
           final_physical_balance: number | null;
@@ -199,6 +200,7 @@ export type Database = {
           branch_id?: string | null;
           created_at?: string;
           deposit_amount?: number;
+          deposit_confirmed?: boolean;
           end_time?: string | null;
           expense_notes?: string | null;
           final_physical_balance?: number | null;
@@ -214,6 +216,7 @@ export type Database = {
           branch_id?: string | null;
           created_at?: string;
           deposit_amount?: number;
+          deposit_confirmed?: boolean;
           end_time?: string | null;
           expense_notes?: string | null;
           final_physical_balance?: number | null;

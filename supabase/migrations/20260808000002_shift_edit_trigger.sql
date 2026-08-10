@@ -1,7 +1,6 @@
 -- Protect closed shifts from financial-field edits.
 -- Blocks changes to financial columns once a shift is closed, while still
--- allowing owner to edit non-financial fields (e.g. notes) AND to confirm a
--- deposit by setting deposit_amount to 0.
+-- allowing owner to confirm a deposit via deposit_confirmed flag.
 -- Idempotent: safe to re-run.
 
 CREATE OR REPLACE FUNCTION public.prevent_closed_shift_financial_edit()
@@ -14,7 +13,7 @@ BEGIN
        OR NEW.initial_physical_balance IS DISTINCT FROM OLD.initial_physical_balance
        OR NEW.total_expenses IS DISTINCT FROM OLD.total_expenses
        OR NEW.topup_request IS DISTINCT FROM OLD.topup_request
-       OR (NEW.deposit_amount IS DISTINCT FROM OLD.deposit_amount AND NEW.deposit_amount <> 0)
+       OR NEW.deposit_amount IS DISTINCT FROM OLD.deposit_amount
     THEN
       RAISE EXCEPTION 'Tidak boleh mengubah data keuangan shift yang sudah ditutup';
     END IF;

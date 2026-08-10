@@ -84,7 +84,7 @@ function Reports() {
       let query = supabase
         .from("shifts")
         .select(
-          "id, user_id, start_time, initial_physical_balance, total_expenses, expense_notes, final_physical_balance, deposit_amount, topup_request, status, branch_id",
+          "id, user_id, start_time, initial_physical_balance, total_expenses, expense_notes, final_physical_balance, deposit_amount, deposit_confirmed, topup_request, status, branch_id",
         )
         .order("start_time", { ascending: false })
         .limit(60);
@@ -398,8 +398,15 @@ function Reports() {
                       <td className="py-3.5 text-right text-destructive">
                         {rupiah(r.shift.total_expenses)}
                       </td>
-                      <td className="py-3.5 text-right font-medium text-cash">
-                        {rupiah(r.shift.deposit_amount)}
+                      <td className="py-3.5 text-right font-medium">
+                        <span className={r.shift.deposit_confirmed ? "text-success" : "text-cash"}>
+                          {rupiah(r.shift.deposit_amount)}
+                        </span>
+                        {r.shift.deposit_confirmed && (
+                          <span className="ml-1 inline-flex items-center rounded-full bg-success/15 px-1.5 py-0.5 text-[9px] font-bold text-success">
+                            OK
+                          </span>
+                        )}
                       </td>
                       <td className="py-3.5 text-right font-bold text-success">
                         {rupiah(r.summary.profit)}
