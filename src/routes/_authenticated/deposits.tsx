@@ -59,7 +59,7 @@ function Deposits() {
       let query = supabase
         .from("shifts")
         .select(
-          "id, user_id, start_time, end_time, final_physical_balance, deposit_amount, deposit_confirmed, branch_id, profiles!shifts_user_id_fkey(username)",
+          "id, user_id, start_time, end_time, final_physical_balance, deposit_amount, deposit_confirmed, branch_id",
         )
         .eq("status", "closed")
         .gt("deposit_amount", 0)
@@ -75,7 +75,19 @@ function Deposits() {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data ?? [];
+      const shiftRows = data ?? [];
+      if (shiftRows.length === 0) return [];
+
+      // shifts.user_id references auth.users, so there is no PostgREST
+      // relationship to public.profiles — resolve cashier names separately.
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .in("id", [...new Set(shiftRows.map((s) => s.user_id))]);
+      if (profilesError) throw profilesError;
+      const usernameOf = new Map((profiles ?? []).map((p) => [p.id, p.username]));
+
+      return shiftRows.map((s) => ({ ...s, cashierName: usernameOf.get(s.user_id) ?? "Kasir" }));
     },
   });
 
@@ -178,7 +190,7 @@ function Deposits() {
         ) : (
           <div className="grid gap-3.5 sm:grid-cols-2">
             {rows.map((r) => {
-              const cashierName = (r.profiles as { username?: string } | null)?.username ?? "Kasir";
+              const cashierName = r.cashierName;
               const amt = num(r.deposit_amount);
               return (
                 <div
