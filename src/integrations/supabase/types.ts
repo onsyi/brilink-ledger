@@ -111,6 +111,7 @@ export type Database = {
           created_at: string;
           full_name: string | null;
           id: string;
+          is_active: boolean;
           username: string;
         };
         Insert: {
@@ -118,6 +119,7 @@ export type Database = {
           created_at?: string;
           full_name?: string | null;
           id: string;
+          is_active?: boolean;
           username: string;
         };
         Update: {
@@ -125,6 +127,7 @@ export type Database = {
           created_at?: string;
           full_name?: string | null;
           id?: string;
+          is_active?: boolean;
           username?: string;
         };
         Relationships: [
@@ -338,9 +341,17 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      /** @deprecated Retired — raises an exception. Use admin_set_user_active. */
       admin_delete_user: {
         Args: {
           target_user_id: string;
+        };
+        Returns: void;
+      };
+      admin_set_user_active: {
+        Args: {
+          target_user_id: string;
+          active: boolean;
         };
         Returns: void;
       };
@@ -353,6 +364,7 @@ export type Database = {
           full_name: string | null;
           created_at: string;
           branch_id: string | null;
+          is_active: boolean;
         }[];
       };
       admin_create_user: {

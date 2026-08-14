@@ -10,8 +10,8 @@ import {
   ArrowRight,
   Shield,
   BarChart3,
-  Zap,
-  WifiOff,
+  Building2,
+  Lock,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -94,14 +94,14 @@ function AuthPage() {
       desc: "Pantau kas fisik, digital, dan laba bersih",
     },
     {
-      icon: Zap,
-      title: "Mode offline siap pakai",
-      desc: "Tetap berjalan walau koneksi terputus",
+      icon: Building2,
+      title: "Multi-cabang",
+      desc: "Pantau beberapa outlet dari satu akun owner",
     },
     {
-      icon: WifiOff,
-      title: "Sinkronisasi otomatis",
-      desc: "Data tersinkron saat koneksi kembali",
+      icon: Lock,
+      title: "Shift terkunci setelah ditutup",
+      desc: "Data keuangan tidak bisa diubah lagi",
     },
   ];
 

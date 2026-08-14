@@ -46,7 +46,10 @@ export function useAuth(): AuthState {
         return;
       }
       try {
-        const [{ data: roleRows }, { data: profile }] = await Promise.all([
+        // supabase-js resolves with { data, error } instead of rejecting, so the
+        // errors have to be re-thrown explicitly. Swallowing them here would
+        // silently downgrade an owner to "cashier" on any transient failure.
+        const [rolesResult, profileResult] = await Promise.all([
           supabase.from("user_roles").select("role").eq("user_id", session.user.id),
           supabase
             .from("profiles")
@@ -54,25 +57,34 @@ export function useAuth(): AuthState {
             .eq("id", session.user.id)
             .maybeSingle(),
         ]);
+        if (rolesResult.error) throw rolesResult.error;
+        if (profileResult.error) throw profileResult.error;
+        const roleRows = rolesResult.data;
+        const profile = profileResult.data;
 
         let branchName: string | null = null;
         if (profile?.branch_id) {
-          const { data: branch } = await supabase
+          // Cosmetic only — a failure here must not block sign-in.
+          const { data: branch, error: branchError } = await supabase
             .from("branches")
             .select("name")
             .eq("id", profile.branch_id)
             .maybeSingle();
+          if (branchError) console.warn("[useAuth] Failed to load branch:", branchError.message);
           branchName = branch?.name ?? null;
         }
 
         if (!active) return;
         const roles = (roleRows ?? []).map((r) => r.role as AppRole);
+        const role = roles.includes("owner") ? "owner" : (roles[0] ?? null);
         setState({
           loading: false,
-          error: null,
+          error: role
+            ? null
+            : "Akun Anda belum memiliki role. Hubungi owner untuk mengaktifkan akses.",
           user: session.user,
           session,
-          role: roles.includes("owner") ? "owner" : (roles[0] ?? "cashier"),
+          role,
           username: profile?.username ?? session.user.email ?? null,
           branchId: profile?.branch_id ?? null,
           branchName,

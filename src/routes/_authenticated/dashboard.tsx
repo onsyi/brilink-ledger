@@ -16,7 +16,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { MoneyInput } from "@/components/MoneyInput";
 import { OwnerOverview } from "@/components/OwnerOverview";
-import { BANKS, modalAwal, num, PPOB_PROVIDERS, rupiah, summarize } from "@/lib/ledger";
+import { BANKS, modalAwal, num, PPOB_PROVIDERS, rupiah } from "@/lib/ledger";
+import { openShiftQuery, type OpenShiftRow } from "@/lib/queries";
 import { QueryError } from "@/components/QueryError";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -35,22 +36,7 @@ function Dashboard() {
   const userId = user?.id;
   const isOwner = role === "owner";
 
-  const shiftQuery = useQuery({
-    queryKey: ["open-shift", userId],
-    enabled: !!userId && !loading && !isOwner,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("shifts")
-        .select(
-          "id, user_id, start_time, initial_physical_balance, total_expenses, status, modal_awal",
-        )
-        .eq("user_id", userId!)
-        .eq("status", "open")
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
+  const shiftQuery = useQuery(openShiftQuery(userId, !loading && !isOwner));
 
   if (loading) return <LoadingBlock />;
   if (isOwner) return <OwnerOverview username={username} />;
@@ -363,15 +349,7 @@ function BalanceList({
   );
 }
 
-type ShiftRow = {
-  id: string;
-  initial_physical_balance: number | string;
-  total_expenses: number | string;
-  start_time: string;
-  modal_awal: number | string | null;
-};
-
-function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow }) {
+function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: OpenShiftRow }) {
   const txns = useQuery({
     queryKey: ["txns", shiftId],
     queryFn: async () => {
@@ -386,8 +364,6 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
       return data ?? [];
     },
   });
-
-  const summary = summarize(txns.data ?? []);
 
   return (
     <div className="space-y-5 sm:space-y-6">
