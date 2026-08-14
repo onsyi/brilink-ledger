@@ -16,7 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/MoneyInput";
-import { BANKS, PPOB_PROVIDERS } from "@/lib/ledger";
+import { BANKS, num, PPOB_PROVIDERS, rupiah } from "@/lib/ledger";
+import { openShiftQuery } from "@/lib/queries";
 import { QueryError } from "@/components/QueryError";
 
 export const Route = createFileRoute("/_authenticated/close-shift")({
@@ -45,20 +46,7 @@ function CloseShift() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const shiftQuery = useQuery({
-    queryKey: ["open-shift", userId],
-    enabled: !!userId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("shifts")
-        .select("id, user_id, start_time, status, modal_awal")
-        .eq("user_id", userId!)
-        .eq("status", "open")
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
+  const shiftQuery = useQuery(openShiftQuery(userId, true));
 
   const shiftId = shiftQuery.data?.id;
 
@@ -75,6 +63,10 @@ function CloseShift() {
   const [showConfirm, setShowConfirm] = useState(false);
   const submittingRef = useRef(false);
 
+  const finalCashValue = num(finalCash);
+  const depositValue = num(deposit);
+  const depositExceedsCash = finalCash !== "" && depositValue > finalCashValue;
+
   const close = useMutation({
     mutationFn: async () => {
       if (submittingRef.current) throw new Error("Sedang diproses");
@@ -85,6 +77,12 @@ function CloseShift() {
       if (Number(deposit || 0) < 0) throw new Error("Setoran tidak boleh negatif");
       if (Number(settlement || 0) < 0) throw new Error("Settlement tidak boleh negatif");
       if (Number(additionalCapital || 0) < 0) throw new Error("Modal tambahan tidak boleh negatif");
+      // Saldo fisik akhir dihitung sebelum uang diserahkan ke owner, jadi setoran
+      // tidak mungkin melebihi isi laci.
+      if (depositExceedsCash)
+        throw new Error(
+          `Setoran (${rupiah(depositValue)}) melebihi saldo fisik akhir (${rupiah(finalCashValue)})`,
+        );
 
       const bankSnapshots = BANKS.map((b) => ({
         bank_name: b,
@@ -237,6 +235,12 @@ function CloseShift() {
             onChange={setSettlement}
           />
         </div>
+        {depositExceedsCash && (
+          <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+            Setoran {rupiah(depositValue)} melebihi saldo fisik akhir {rupiah(finalCashValue)}.
+            Hitung saldo fisik akhir sebelum uang diserahkan ke owner.
+          </p>
+        )}
         <div className="space-y-1.5 pt-2">
           <Label htmlFor="expense-notes" className="text-xs font-medium text-muted-foreground">
             Rincian pengeluaran (listrik, parkir, bensin, …)
@@ -302,7 +306,12 @@ function CloseShift() {
       </section>
 
       {/* Submit Button */}
-      <Button type="submit" size="lg" disabled={close.isPending} className="w-full sm:w-auto">
+      <Button
+        type="submit"
+        size="lg"
+        disabled={close.isPending || depositExceedsCash}
+        className="w-full sm:w-auto"
+      >
         {close.isPending ? (
           <Loader2 className="mr-2 size-4 animate-spin" />
         ) : (
