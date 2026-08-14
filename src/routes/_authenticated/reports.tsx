@@ -11,6 +11,7 @@ import {
   Building2,
   Receipt,
   Clock,
+  TriangleAlert,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -36,22 +37,33 @@ export const Route = createFileRoute("/_authenticated/reports")({
 
 type Period = "today" | "week" | "month" | "all";
 
-function filterByPeriod(start: string, period: Period): boolean {
-  if (period === "all") return true;
-  const d = new Date(start);
+const SHIFT_LIMIT = 200;
+
+/**
+ * Half-open [from, to) window for a period, in local time.
+ *
+ * This used to be a client-side filter applied *after* `.limit(60)`, so any
+ * period holding more than 60 shifts silently lost the rest and every total on
+ * the page under-reported. The window is now pushed into the query.
+ */
+function periodRange(period: Period): { from: Date; to?: Date } | null {
+  if (period === "all") return null;
   const now = new Date();
   if (period === "today") {
-    return d.toDateString() === now.toDateString();
+    const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const to = new Date(from);
+    to.setDate(to.getDate() + 1);
+    return { from, to };
   }
   if (period === "week") {
-    const weekAgo = new Date(now);
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    return d >= weekAgo;
+    const from = new Date(now);
+    from.setDate(from.getDate() - 7);
+    return { from };
   }
-  if (period === "month") {
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  }
-  return true;
+  return {
+    from: new Date(now.getFullYear(), now.getMonth(), 1),
+    to: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+  };
 }
 
 function Reports() {
@@ -83,18 +95,25 @@ function Reports() {
         .from("shifts")
         .select(
           "id, user_id, start_time, initial_physical_balance, final_physical_balance, modal_awal, modal_akhir, additional_capital, settlement_amount, total_expenses, expense_notes, deposit_amount, deposit_confirmed, topup_request, status, branch_id",
+          { count: "exact" },
         )
         .order("start_time", { ascending: false })
-        .limit(60);
+        .limit(SHIFT_LIMIT);
       if (!isOwner && user?.id) {
         query = query.eq("user_id", user.id);
       } else if (isOwner && branchFilter !== "all") {
         query = query.eq("branch_id", branchFilter);
       }
-      const { data: shiftRows, error } = await query;
+      const range = periodRange(periodFilter);
+      if (range) {
+        query = query.gte("start_time", range.from.toISOString());
+        if (range.to) query = query.lt("start_time", range.to.toISOString());
+      }
+      const { data: shiftRows, error, count } = await query;
       if (error) throw error;
+      const matched = count ?? (shiftRows ?? []).length;
       const ids = (shiftRows ?? []).map((s) => s.id);
-      if (ids.length === 0) return [];
+      if (ids.length === 0) return { rows: [], matched, truncated: false };
       const [
         { data: txns },
         { data: profiles },
@@ -137,31 +156,31 @@ function Reports() {
           (bankFinalsByShift.get(b.shift_id) ?? 0) + num(b.final_amount),
         );
       });
-      return (shiftRows ?? [])
-        .filter((s) => filterByPeriod(s.start_time, periodFilter))
-        .map((s) => ({
-          shift: s,
-          txnCount: txnCountByShift.get(s.id) ?? 0,
-          ppobUsed: ppobUsedByShift.get(s.id) ?? 0,
-          laba:
-            s.modal_akhir === null
-              ? null
-              : labaFee({
-                  initialPhysical: num(s.initial_physical_balance),
-                  finalPhysical: num(s.final_physical_balance),
-                  bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
-                  bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
-                  expenses: num(s.total_expenses),
-                  settlement: num(s.settlement_amount),
-                  topup: num(s.topup_request),
-                }),
-          cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
-          branchName: (s.branch_id && branchNameOf.get(s.branch_id)) || "—",
-        }));
+      const rows = (shiftRows ?? []).map((s) => ({
+        shift: s,
+        txnCount: txnCountByShift.get(s.id) ?? 0,
+        ppobUsed: ppobUsedByShift.get(s.id) ?? 0,
+        laba:
+          s.modal_akhir === null
+            ? null
+            : labaFee({
+                initialPhysical: num(s.initial_physical_balance),
+                finalPhysical: num(s.final_physical_balance),
+                bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
+                bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
+                expenses: num(s.total_expenses),
+                settlement: num(s.settlement_amount),
+                topup: num(s.topup_request),
+              }),
+        cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
+        branchName: (s.branch_id && branchNameOf.get(s.branch_id)) || "—",
+      }));
+      return { rows, matched, truncated: matched > rows.length };
     },
   });
 
-  const rows = useMemo(() => shifts.data ?? [], [shifts.data]);
+  const rows = useMemo(() => shifts.data?.rows ?? [], [shifts.data]);
+  const truncated = shifts.data?.truncated ?? false;
   const totalLaba = rows.reduce((s, r) => s + (r.laba ?? 0), 0);
   const totalDeposit = rows.reduce((s, r) => s + num(r.shift.deposit_amount), 0);
 
@@ -274,6 +293,20 @@ function Reports() {
           </button>
         ))}
       </div>
+
+      {/* Truncation notice — totals below cover only the rows actually loaded */}
+      {truncated && (
+        <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm backdrop-blur-sm">
+          <TriangleAlert className="size-4 shrink-0 text-warning" />
+          <span className="text-muted-foreground">
+            Periode ini punya{" "}
+            <span className="num font-semibold text-foreground">{shifts.data?.matched}</span> shift,
+            tetapi hanya <span className="num font-semibold text-foreground">{rows.length}</span>{" "}
+            terbaru yang dimuat. Angka total di bawah belum mencakup seluruh periode — persempit
+            filter cabang atau periode untuk rekap yang akurat.
+          </span>
+        </div>
+      )}
 
       {/* Stats Summary Cards */}
       <div className="responsive-grid-3">
