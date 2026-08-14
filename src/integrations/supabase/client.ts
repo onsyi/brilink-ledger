@@ -2,12 +2,18 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 
 function createSupabaseClient() {
-  const SUPABASE_URL = import.meta.env["VITE_SUPABASE_URL"] || process.env["SUPABASE_URL"];
+  // `process` does not exist in the browser bundle. Referencing it directly
+  // threw "process is not defined" the moment a VITE_ var was missing, which
+  // pre-empted the helpful message below with an opaque ReferenceError.
+  const nodeEnv: Record<string, string | undefined> =
+    typeof process !== "undefined" && process.env ? process.env : {};
+
+  const SUPABASE_URL = import.meta.env["VITE_SUPABASE_URL"] || nodeEnv["SUPABASE_URL"];
   const SUPABASE_ANON_KEY =
     import.meta.env["VITE_SUPABASE_ANON_KEY"] ||
     import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
-    process.env["SUPABASE_ANON_KEY"] ||
-    process.env["SUPABASE_PUBLISHABLE_KEY"];
+    nodeEnv["SUPABASE_ANON_KEY"] ||
+    nodeEnv["SUPABASE_PUBLISHABLE_KEY"];
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     const missing = [

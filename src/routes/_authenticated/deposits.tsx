@@ -108,9 +108,11 @@ function Deposits() {
   });
 
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [confirmAmount, setConfirmAmount] = useState(0);
 
   const rows = shifts.data ?? [];
+  // Derived rather than stored, so the dialog can never show an amount left
+  // over from a previously selected shift.
+  const confirmAmount = num(rows.find((r) => r.id === confirmId)?.deposit_amount);
   const totalPending = rows.reduce((s, r) => s + num(r.deposit_amount), 0);
 
   return (
@@ -215,10 +217,7 @@ function Deposits() {
                       size="sm"
                       variant="outline"
                       className="w-full mt-1 border-primary/30 text-primary hover:bg-primary/10"
-                      onClick={() => {
-                        setConfirmId(r.id);
-                        setConfirmAmount(amt);
-                      }}
+                      onClick={() => setConfirmId(r.id)}
                     >
                       <CheckCircle2 className="mr-1.5 size-4" /> Konfirmasi Diterima
                     </Button>

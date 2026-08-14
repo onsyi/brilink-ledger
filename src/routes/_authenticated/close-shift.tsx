@@ -39,6 +39,9 @@ export const Route = createFileRoute("/_authenticated/close-shift")({
   component: CloseShift,
 });
 
+/** Sentinel for a submission rejected because one is already in flight. */
+const IN_FLIGHT = "__close_shift_in_flight__";
+
 function CloseShift() {
   const { user, role, loading: authLoading } = useAuth();
   const userId = user?.id;
@@ -69,7 +72,7 @@ function CloseShift() {
 
   const close = useMutation({
     mutationFn: async () => {
-      if (submittingRef.current) throw new Error("Sedang diproses");
+      if (submittingRef.current) throw new Error(IN_FLIGHT);
       submittingRef.current = true;
       if (!shiftId) throw new Error("Tidak ada shift aktif");
       if (finalCash === "") throw new Error("Saldo fisik akhir wajib diisi");
@@ -116,6 +119,9 @@ function CloseShift() {
       navigate({ to: "/reports" });
     },
     onError: (e: Error) => {
+      // A rejected duplicate must not release the guard — the first submission
+      // still owns it. Clearing it here let a third click through to the RPC.
+      if (e.message === IN_FLIGHT) return;
       submittingRef.current = false;
       toast.error(e.message);
     },
