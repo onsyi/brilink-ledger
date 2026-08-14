@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { num, rupiah } from "@/lib/ledger";
+import { laba, num, rupiah } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
 import { QueryError } from "@/components/QueryError";
 
@@ -111,6 +111,7 @@ function Reports() {
         .map((s) => ({
           shift: s,
           txnCount: txnCountByShift.get(s.id) ?? 0,
+          laba: s.modal_akhir === null ? null : laba(num(s.modal_akhir), num(s.modal_awal)),
           cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
           branchName: (s.branch_id && branchNameOf.get(s.branch_id)) || "—",
         }));
@@ -118,13 +119,13 @@ function Reports() {
   });
 
   const rows = useMemo(() => shifts.data ?? [], [shifts.data]);
-  const totalProfit = rows.reduce((s, r) => s + num(r.shift.modal_akhir), 0);
+  const totalLaba = rows.reduce((s, r) => s + (r.laba ?? 0), 0);
   const totalDeposit = rows.reduce((s, r) => s + num(r.shift.deposit_amount), 0);
 
   const periodStats = useMemo(() => {
     return {
       count: rows.length,
-      profit: rows.reduce((s, r) => s + num(r.shift.modal_akhir), 0),
+      laba: rows.reduce((s, r) => s + (r.laba ?? 0), 0),
       txn: rows.reduce((s, r) => s + r.txnCount, 0),
       deposit: rows.reduce((s, r) => s + num(r.shift.deposit_amount), 0),
       open: rows.filter((r) => r.shift.status === "open").length,
@@ -143,16 +144,16 @@ function Reports() {
   // Data points for SVG chart (chronological order)
   const chartPoints = useMemo(() => {
     const sorted = [...rows]
-      .filter((r) => r.shift.modal_akhir !== null)
+      .filter((r) => r.laba !== null)
       .reverse()
       .slice(-12);
-    const maxVal = Math.max(...sorted.map((r) => num(r.shift.modal_akhir)), 10000);
+    const maxVal = Math.max(...sorted.map((r) => r.laba ?? 0), 10000);
     return sorted.map((r) => {
-      const height = Math.max(15, Math.round((num(r.shift.modal_akhir) / maxVal) * 100));
+      const height = Math.max(15, Math.round(((r.laba ?? 0) / maxVal) * 100));
       return {
         id: r.shift.id,
         height,
-        profit: num(r.shift.modal_akhir),
+        profit: r.laba ?? 0,
         date: new Date(r.shift.start_time).toLocaleDateString("id-ID", {
           day: "numeric",
           month: "short",
@@ -234,8 +235,8 @@ function Reports() {
       {/* Stats Summary Cards */}
       <div className="responsive-grid-3">
         <Stat
-          label="Total modal akhir"
-          value={rupiah(totalProfit)}
+          label="Total laba"
+          value={rupiah(totalLaba)}
           icon={<TrendingUp className="size-5" />}
           gradient="gradient-text-emerald"
           iconBg="bg-[oklch(0.72_0.17_155_/_0.15)] text-success"
@@ -261,7 +262,7 @@ function Reports() {
         <section className="glass-card p-5 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-bold">Grafik Modal Akhir Shift</h2>
+              <h2 className="text-base font-bold">Grafik Laba Shift</h2>
               <p className="text-xs text-muted-foreground">
                 Tren performa {chartPoints.length} shift terakhir
               </p>
@@ -323,6 +324,7 @@ function Reports() {
                   <th className="pb-3 text-right">Pengeluaran</th>
                   <th className="pb-3 text-right">Setoran</th>
                   <th className="pb-3 text-right">Modal Akhir</th>
+                  <th className="pb-3 text-right">Laba</th>
                   <th className="pb-3 text-center">Status</th>
                 </tr>
               </thead>
@@ -370,6 +372,9 @@ function Reports() {
                     </td>
                     <td className="py-3.5 text-right font-bold text-success">
                       {r.shift.modal_akhir !== null ? rupiah(r.shift.modal_akhir) : "—"}
+                    </td>
+                    <td className="py-3.5 text-right font-bold text-success">
+                      {r.laba !== null ? rupiah(r.laba) : "—"}
                     </td>
                     <td className="py-3.5 text-center">
                       <span

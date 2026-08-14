@@ -74,7 +74,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
               r.shift.status === "closed" &&
               new Date(r.shift.start_time).toLocaleDateString("id-ID") === today,
           )
-          .reduce((s, r) => s + num(r.shift.modal_akhir), 0),
+          .reduce((s, r) => s + (num(r.shift.modal_akhir) - num(r.shift.modal_awal)), 0),
         cashiers: new Set(rows.map((r) => r.shift.user_id)).size,
       };
     },
@@ -246,7 +246,9 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                   </td>
                   <td className="py-3 text-right">{r.txnCount}</td>
                   <td className="py-3 text-right font-semibold text-success">
-                    {r.shift.modal_akhir !== null ? rupiah(r.shift.modal_akhir) : "—"}
+                    {r.shift.modal_akhir !== null
+                      ? rupiah(num(r.shift.modal_akhir) - num(r.shift.modal_awal))
+                      : "—"}
                   </td>
                   <td className="py-3 text-right">
                     <span

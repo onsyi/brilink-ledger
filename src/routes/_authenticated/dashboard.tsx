@@ -97,6 +97,7 @@ function OpenShiftPanel({
   const lastShift = useQuery({
     queryKey: ["last-closed-shift", userId],
     enabled: !!userId,
+    staleTime: 0,
     queryFn: async () => {
       const { data: shift } = await supabase
         .from("shifts")
@@ -169,6 +170,7 @@ function OpenShiftPanel({
     onSuccess: () => {
       toast.success("Shift dibuka");
       queryClient.invalidateQueries({ queryKey: ["open-shift", userId] });
+      queryClient.invalidateQueries({ queryKey: ["last-closed-shift", userId] });
     },
     onError: (e: Error & { code?: string }) =>
       toast.error(
@@ -231,6 +233,11 @@ function OpenShiftPanel({
               <Building2 className="size-4 text-digital" />
               <h2 className="text-sm font-bold">Saldo awal rekening (Bank)</h2>
             </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {lastShift.data
+                ? "Terisi otomatis dari saldo akhir shift sebelumnya — bisa dikoreksi."
+                : "Isi manual hanya untuk shift pertama kali."}
+            </p>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {BANKS.map((b) => (
                 <MoneyInput
@@ -249,6 +256,11 @@ function OpenShiftPanel({
               <CreditCard className="size-4 text-accent" />
               <h2 className="text-sm font-bold">Saldo awal PPOB</h2>
             </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {lastShift.data
+                ? "Terisi otomatis dari saldo akhir shift sebelumnya — bisa dikoreksi."
+                : "Isi manual hanya untuk shift pertama kali."}
+            </p>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {PPOB_PROVIDERS.map((p) => (
                 <MoneyInput

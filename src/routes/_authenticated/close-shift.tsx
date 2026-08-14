@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/MoneyInput";
-import { BANKS, modalAkhir, num, PPOB_PROVIDERS, rupiah } from "@/lib/ledger";
+import { BANKS, laba, modalAkhir, num, PPOB_PROVIDERS, rupiah } from "@/lib/ledger";
 import { QueryError } from "@/components/QueryError";
 
 export const Route = createFileRoute("/_authenticated/close-shift")({
@@ -74,16 +74,12 @@ function CloseShift() {
   const submittingRef = useRef(false);
 
   const modalAwal = num(shiftQuery.data?.modal_awal);
-  const totalAsetAkhir =
-    Number(finalCash || 0) +
-    BANKS.reduce((s, b) => s + Number(banks[b] || 0), 0) +
-    PPOB_PROVIDERS.reduce((s, p) => s + Number(ppob[p] || 0), 0);
   const modalAkhirValue = modalAkhir({
     finalPhysical: Number(finalCash || 0),
     bankFinals: BANKS.map((b) => Number(banks[b] || 0)),
     ppobFinals: PPOB_PROVIDERS.map((p) => Number(ppob[p] || 0)),
-    modalAwal,
   });
+  const labaValue = laba(modalAkhirValue, modalAwal);
 
   const close = useMutation({
     mutationFn: async () => {
@@ -120,6 +116,7 @@ function CloseShift() {
       toast.success("Shift ditutup dan terkunci");
       queryClient.invalidateQueries({ queryKey: ["open-shift"] });
       queryClient.invalidateQueries({ queryKey: ["deposit-shifts"] });
+      queryClient.invalidateQueries({ queryKey: ["last-closed-shift"] });
       navigate({ to: "/reports" });
     },
     onError: (e: Error) => {
@@ -209,15 +206,15 @@ function CloseShift() {
           </p>
         </div>
         <div className="ledger-card p-5">
-          <p className="text-xs font-medium text-muted-foreground">Total aset akhir</p>
+          <p className="text-xs font-medium text-muted-foreground">Modal akhir</p>
           <p className="num mt-2 text-xl font-bold gradient-text-cyan sm:text-2xl">
-            {rupiah(totalAsetAkhir)}
+            {rupiah(modalAkhirValue)}
           </p>
         </div>
         <div className="ledger-card p-5">
-          <p className="text-xs font-medium text-muted-foreground">Modal akhir (laba/rugi)</p>
+          <p className="text-xs font-medium text-muted-foreground">Laba (laba/rugi)</p>
           <p className="num mt-2 text-xl font-bold gradient-text-emerald sm:text-2xl">
-            {rupiah(modalAkhirValue)}
+            {rupiah(labaValue)}
           </p>
         </div>
       </div>

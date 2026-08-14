@@ -111,19 +111,22 @@ export function modalAwal(opts: {
 }
 
 /**
- * Modal akhir (closing result): final physical cash + final bank/PPOB balances
- * minus modal awal. Represents the shift's net profit/loss.
+ * Modal akhir (gross closing capital): final physical cash + final bank/PPOB balances.
+ * Laba/rugi shift dihitung dengan modalAkhir - modalAwal.
  */
 export function modalAkhir(opts: {
   finalPhysical: number;
   bankFinals: number[];
   ppobFinals: number[];
-  modalAwal: number;
 }) {
   return (
     opts.finalPhysical +
     opts.bankFinals.reduce((s, n) => s + n, 0) +
-    opts.ppobFinals.reduce((s, n) => s + n, 0) -
-    opts.modalAwal
+    opts.ppobFinals.reduce((s, n) => s + n, 0)
   );
+}
+
+/** Laba/rugi shift = modal akhir (gross) - modal awal. */
+export function laba(modalAkhir: number, modalAwal: number) {
+  return modalAkhir - modalAwal;
 }
