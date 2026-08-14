@@ -41,6 +41,7 @@ type UserProfile = {
   role?: AppRole;
   branch_id?: string | null;
   branch_name?: string | null;
+  is_active?: boolean;
 };
 
 function SettingsPage() {
@@ -83,8 +84,8 @@ function SettingsPage() {
   const [editEmail, setEditEmail] = useState("");
   const [savingCashier, setSavingCashier] = useState(false);
 
-  const [deleteUser, setDeleteUser] = useState<UserProfile | null>(null);
-  const [deletingUser, setDeletingUser] = useState(false);
+  const [toggleUser, setToggleUser] = useState<UserProfile | null>(null);
+  const [togglingUser, setTogglingUser] = useState(false);
 
   const branches = useQuery({
     queryKey: ["branches"],
@@ -166,6 +167,7 @@ function SettingsPage() {
         branch_id: u.branch_id,
         branch_name: u.branch_id ? (branchMap.get(u.branch_id) ?? null) : null,
         role: roleMap.get(u.id) ?? "cashier",
+        is_active: u.is_active,
       }));
       setUsers(merged);
     }
@@ -340,18 +342,24 @@ function SettingsPage() {
     fetchUsers();
   };
 
-  const deleteUserAccount = async () => {
-    if (!deleteUser) return;
-    setDeletingUser(true);
-    const { error } = await supabase.rpc("admin_delete_user", {
-      target_user_id: deleteUser.id,
+  const setUserActive = async () => {
+    if (!toggleUser) return;
+    const nextActive = toggleUser.is_active === false;
+    setTogglingUser(true);
+    const { error } = await supabase.rpc("admin_set_user_active", {
+      target_user_id: toggleUser.id,
+      active: nextActive,
     });
-    setDeletingUser(false);
+    setTogglingUser(false);
     if (error) {
-      toast.error("Gagal menghapus user: " + error.message);
+      toast.error("Gagal mengubah status akun: " + error.message);
     } else {
-      toast.success(`User ${deleteUser.username} berhasil dihapus`);
-      setDeleteUser(null);
+      toast.success(
+        nextActive
+          ? `Akun ${toggleUser.username} diaktifkan kembali`
+          : `Akun ${toggleUser.username} dinonaktifkan`,
+      );
+      setToggleUser(null);
       fetchUsers();
     }
   };
@@ -466,7 +474,11 @@ function SettingsPage() {
                 {users.map((u) => (
                   <div
                     key={u.id}
-                    className="flex flex-col gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
+                    className={`flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${
+                      u.is_active === false
+                        ? "border-destructive/25 bg-destructive/5 opacity-75"
+                        : "border-border"
+                    }`}
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex size-10 items-center justify-center rounded-full bg-secondary text-sm font-bold">
@@ -481,6 +493,11 @@ function SettingsPage() {
                           {u.branch_name && (
                             <Badge variant="outline" className="text-xs">
                               {u.branch_name}
+                            </Badge>
+                          )}
+                          {u.is_active === false && (
+                            <Badge variant="destructive" className="text-xs">
+                              Nonaktif
                             </Badge>
                           )}
                         </div>
@@ -548,8 +565,12 @@ function SettingsPage() {
                         </Button>
                       )}
                       {u.role !== "owner" && (
-                        <Button size="sm" variant="destructive" onClick={() => setDeleteUser(u)}>
-                          Hapus
+                        <Button
+                          size="sm"
+                          variant={u.is_active === false ? "default" : "destructive"}
+                          onClick={() => setToggleUser(u)}
+                        >
+                          {u.is_active === false ? "Aktifkan" : "Nonaktifkan"}
                         </Button>
                       )}
                     </div>
@@ -765,24 +786,40 @@ function SettingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete User Dialog */}
-      <Dialog open={!!deleteUser} onOpenChange={() => setDeleteUser(null)}>
+      {/* Activate / Deactivate User Dialog */}
+      <Dialog open={!!toggleUser} onOpenChange={() => setToggleUser(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Hapus User</DialogTitle>
+            <DialogTitle>
+              {toggleUser?.is_active === false ? "Aktifkan Akun" : "Nonaktifkan Akun"}
+            </DialogTitle>
             <DialogDescription>
-              Anda yakin ingin menghapus akun{" "}
-              <span className="font-medium">{deleteUser?.username}</span>? Tindakan ini tidak dapat
-              dibatalkan. Semua data terkait (shift, transaksi) akan tetap tersimpan di database.
+              {toggleUser?.is_active === false ? (
+                <>
+                  Aktifkan kembali akun <span className="font-medium">{toggleUser?.username}</span>?
+                  Kasir akan dapat masuk dan membuka shift seperti biasa.
+                </>
+              ) : (
+                <>
+                  Nonaktifkan akun <span className="font-medium">{toggleUser?.username}</span>?
+                  Kasir tidak akan bisa masuk atau membuka shift baru, tetapi seluruh riwayat shift
+                  dan transaksinya tetap tersimpan dan tetap muncul di laporan. Akun bisa diaktifkan
+                  lagi kapan saja.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setDeleteUser(null)}>
+            <Button variant="secondary" onClick={() => setToggleUser(null)}>
               Batal
             </Button>
-            <Button variant="destructive" onClick={deleteUserAccount} disabled={deletingUser}>
-              {deletingUser && <Loader2 className="mr-2 size-4 animate-spin" />}
-              Ya, Hapus
+            <Button
+              variant={toggleUser?.is_active === false ? "default" : "destructive"}
+              onClick={setUserActive}
+              disabled={togglingUser}
+            >
+              {togglingUser && <Loader2 className="mr-2 size-4 animate-spin" />}
+              {toggleUser?.is_active === false ? "Ya, Aktifkan" : "Ya, Nonaktifkan"}
             </Button>
           </DialogFooter>
         </DialogContent>
