@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { laba, num, rupiah } from "@/lib/ledger";
+import { labaFee, num, rupiah } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
 import { QueryError } from "@/components/QueryError";
 
@@ -82,7 +82,7 @@ function Reports() {
       let query = supabase
         .from("shifts")
         .select(
-          "id, user_id, start_time, modal_awal, modal_akhir, total_expenses, expense_notes, final_physical_balance, deposit_amount, deposit_confirmed, topup_request, status, branch_id",
+          "id, user_id, start_time, initial_physical_balance, final_physical_balance, modal_awal, modal_akhir, additional_capital, settlement_amount, total_expenses, expense_notes, deposit_amount, deposit_confirmed, topup_request, status, branch_id",
         )
         .order("start_time", { ascending: false })
         .limit(60);
@@ -95,10 +95,24 @@ function Reports() {
       if (error) throw error;
       const ids = (shiftRows ?? []).map((s) => s.id);
       if (ids.length === 0) return [];
-      const [{ data: txns }, { data: profiles }, { data: allBranches }] = await Promise.all([
+      const [
+        { data: txns },
+        { data: profiles },
+        { data: allBranches },
+        { data: ppobRows },
+        { data: bankRows },
+      ] = await Promise.all([
         supabase.from("transactions").select("shift_id").in("shift_id", ids),
         supabase.from("profiles").select("id, username, branch_id"),
         supabase.from("branches").select("id, name"),
+        supabase
+          .from("ppob_balances")
+          .select("shift_id, initial_amount, topup_amount, final_amount")
+          .in("shift_id", ids),
+        supabase
+          .from("bank_balances")
+          .select("shift_id, initial_amount, final_amount")
+          .in("shift_id", ids),
       ]);
       const branchNameOf = new Map<string, string>();
       (allBranches ?? []).forEach((b) => branchNameOf.set(b.id, b.name));
@@ -106,12 +120,41 @@ function Reports() {
       (txns ?? []).forEach((t) => {
         txnCountByShift.set(t.shift_id, (txnCountByShift.get(t.shift_id) ?? 0) + 1);
       });
+      const ppobUsedByShift = new Map<string, number>();
+      (ppobRows ?? []).forEach((p) => {
+        const used = num(p.initial_amount) + num(p.topup_amount) - num(p.final_amount);
+        ppobUsedByShift.set(p.shift_id, (ppobUsedByShift.get(p.shift_id) ?? 0) + used);
+      });
+      const bankInitialsByShift = new Map<string, number>();
+      const bankFinalsByShift = new Map<string, number>();
+      (bankRows ?? []).forEach((b) => {
+        bankInitialsByShift.set(
+          b.shift_id,
+          (bankInitialsByShift.get(b.shift_id) ?? 0) + num(b.initial_amount),
+        );
+        bankFinalsByShift.set(
+          b.shift_id,
+          (bankFinalsByShift.get(b.shift_id) ?? 0) + num(b.final_amount),
+        );
+      });
       return (shiftRows ?? [])
         .filter((s) => filterByPeriod(s.start_time, periodFilter))
         .map((s) => ({
           shift: s,
           txnCount: txnCountByShift.get(s.id) ?? 0,
-          laba: s.modal_akhir === null ? null : laba(num(s.modal_akhir), num(s.modal_awal)),
+          ppobUsed: ppobUsedByShift.get(s.id) ?? 0,
+          laba:
+            s.modal_akhir === null
+              ? null
+              : labaFee({
+                  initialPhysical: num(s.initial_physical_balance),
+                  finalPhysical: num(s.final_physical_balance),
+                  bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
+                  bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
+                  expenses: num(s.total_expenses),
+                  settlement: num(s.settlement_amount),
+                  topup: num(s.topup_request),
+                }),
           cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
           branchName: (s.branch_id && branchNameOf.get(s.branch_id)) || "—",
         }));
@@ -235,7 +278,7 @@ function Reports() {
       {/* Stats Summary Cards */}
       <div className="responsive-grid-3">
         <Stat
-          label="Total laba"
+          label="Total laba fee"
           value={rupiah(totalLaba)}
           icon={<TrendingUp className="size-5" />}
           gradient="gradient-text-emerald"
@@ -262,7 +305,7 @@ function Reports() {
         <section className="glass-card p-5 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-bold">Grafik Laba Shift</h2>
+              <h2 className="text-base font-bold">Grafik Laba Fee Shift</h2>
               <p className="text-xs text-muted-foreground">
                 Tren performa {chartPoints.length} shift terakhir
               </p>
@@ -323,8 +366,11 @@ function Reports() {
                   <th className="pb-3 text-right">Saldo Fisik</th>
                   <th className="pb-3 text-right">Pengeluaran</th>
                   <th className="pb-3 text-right">Setoran</th>
+                  <th className="pb-3 text-right">Modal Tambahan</th>
+                  <th className="pb-3 text-right">Settlement</th>
+                  <th className="pb-3 text-right">PPOB Terpakai</th>
                   <th className="pb-3 text-right">Modal Akhir</th>
-                  <th className="pb-3 text-right">Laba</th>
+                  <th className="pb-3 text-right">Laba Fee</th>
                   <th className="pb-3 text-center">Status</th>
                 </tr>
               </thead>
@@ -369,6 +415,11 @@ function Reports() {
                           OK
                         </span>
                       )}
+                    </td>
+                    <td className="py-3.5 text-right">{rupiah(r.shift.additional_capital)}</td>
+                    <td className="py-3.5 text-right">{rupiah(r.shift.settlement_amount)}</td>
+                    <td className="py-3.5 text-right font-medium text-accent">
+                      {rupiah(r.ppobUsed)}
                     </td>
                     <td className="py-3.5 text-right font-bold text-success">
                       {r.shift.modal_akhir !== null ? rupiah(r.shift.modal_akhir) : "—"}

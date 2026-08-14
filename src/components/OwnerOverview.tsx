@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { num, rupiah } from "@/lib/ledger";
+import { labaFee, num, rupiah } from "@/lib/ledger";
 import { QueryError } from "@/components/QueryError";
 
 export function OwnerOverview({ username }: { username?: string | null }) {
@@ -38,7 +38,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       let query = supabase
         .from("shifts")
         .select(
-          "id, user_id, start_time, initial_physical_balance, status, branch_id, modal_awal, modal_akhir",
+          "id, user_id, start_time, initial_physical_balance, final_physical_balance, total_expenses, topup_request, settlement_amount, status, branch_id, modal_awal, modal_akhir, additional_capital",
         )
         .order("start_time", { ascending: false })
         .limit(60);
@@ -48,21 +48,51 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       const { data: shifts, error } = await query;
       if (error) throw error;
       const ids = (shifts ?? []).map((s) => s.id);
-      const [{ data: txns }, { data: profiles }] = await Promise.all([
+      const [{ data: txns }, { data: profiles }, { data: bankRows }] = await Promise.all([
         ids.length
           ? supabase.from("transactions").select("shift_id").in("shift_id", ids)
           : Promise.resolve({ data: [] as never[] }),
         supabase.from("profiles").select("id, username"),
+        ids.length
+          ? supabase
+              .from("bank_balances")
+              .select("shift_id, initial_amount, final_amount")
+              .in("shift_id", ids)
+          : Promise.resolve({ data: [] as never[] }),
       ]);
       const nameOf = (id: string) => (profiles ?? []).find((p) => p.id === id)?.username ?? "kasir";
       const txnCountByShift = new Map<string, number>();
       (txns ?? []).forEach((t) => {
         txnCountByShift.set(t.shift_id, (txnCountByShift.get(t.shift_id) ?? 0) + 1);
       });
+      const bankInitialsByShift = new Map<string, number>();
+      const bankFinalsByShift = new Map<string, number>();
+      (bankRows ?? []).forEach((b) => {
+        bankInitialsByShift.set(
+          b.shift_id,
+          (bankInitialsByShift.get(b.shift_id) ?? 0) + num(b.initial_amount),
+        );
+        bankFinalsByShift.set(
+          b.shift_id,
+          (bankFinalsByShift.get(b.shift_id) ?? 0) + num(b.final_amount),
+        );
+      });
       const rows = (shifts ?? []).map((s) => ({
         shift: s,
         txnCount: txnCountByShift.get(s.id) ?? 0,
         cashier: nameOf(s.user_id),
+        labaFee:
+          s.modal_akhir === null
+            ? null
+            : labaFee({
+                initialPhysical: num(s.initial_physical_balance),
+                finalPhysical: num(s.final_physical_balance),
+                bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
+                bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
+                expenses: num(s.total_expenses),
+                settlement: num(s.settlement_amount),
+                topup: num(s.topup_request),
+              }),
       }));
       const today = new Date().toLocaleDateString("id-ID");
       return {
@@ -74,7 +104,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
               r.shift.status === "closed" &&
               new Date(r.shift.start_time).toLocaleDateString("id-ID") === today,
           )
-          .reduce((s, r) => s + (num(r.shift.modal_akhir) - num(r.shift.modal_awal)), 0),
+          .reduce((s, r) => s + (r.labaFee ?? 0), 0),
         cashiers: new Set(rows.map((r) => r.shift.user_id)).size,
       };
     },
@@ -147,7 +177,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
           gradient="gradient-text-gold"
         />
         <Kpi
-          label="Laba hari ini"
+          label="Laba fee hari ini"
           value={rupiah(d?.profitToday ?? 0)}
           icon={<TrendingUp className="size-5" />}
           iconBg="bg-[oklch(0.72_0.17_155_/_0.15)]"
@@ -246,9 +276,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                   </td>
                   <td className="py-3 text-right">{r.txnCount}</td>
                   <td className="py-3 text-right font-semibold text-success">
-                    {r.shift.modal_akhir !== null
-                      ? rupiah(num(r.shift.modal_akhir) - num(r.shift.modal_awal))
-                      : "—"}
+                    {r.labaFee !== null ? rupiah(r.labaFee) : "—"}
                   </td>
                   <td className="py-3 text-right">
                     <span

@@ -6,12 +6,7 @@ import {
   PlayCircle,
   Loader2,
   ArrowRight,
-  Wallet,
-  TrendingUp,
-  Receipt,
   Banknote,
-  ArrowDownLeft,
-  ArrowUpRight,
   CreditCard,
   TriangleAlert,
   Building2,
@@ -88,7 +83,6 @@ function OpenShiftPanel({
 }) {
   const queryClient = useQueryClient();
   const [initial, setInitial] = useState("");
-  const [additionalCapital, setAdditionalCapital] = useState("");
   const [banks, setBanks] = useState<Record<string, string>>({});
   const [ppob, setPpob] = useState<Record<string, string>>({});
   const [hydrated, setHydrated] = useState(false);
@@ -142,10 +136,13 @@ function OpenShiftPanel({
 
   const openingTotal = modalAwal({
     initialPhysical: num(initial),
-    additionalCapital: num(additionalCapital),
     bankInitials: BANKS.map((b) => num(banks[b])),
     ppobInitials: PPOB_PROVIDERS.map((p) => num(ppob[p])),
   });
+
+  const bankInitialsTotal = BANKS.reduce((s, b) => s + num(banks[b]), 0);
+  const ppobInitialsTotal = PPOB_PROVIDERS.reduce((s, p) => s + num(ppob[p]), 0);
+  const fisikBankTotal = num(initial) + bankInitialsTotal;
 
   const openShift = useMutation({
     mutationFn: async () => {
@@ -161,7 +158,6 @@ function OpenShiftPanel({
         _user_id: userId!,
         _branch_id: branchId ?? null,
         _initial_cash: Number(initial || 0),
-        _additional_capital: Number(additionalCapital || 0),
         _bank_snapshots: bankSnapshots,
         _ppob_snapshots: ppobSnapshots,
       });
@@ -195,7 +191,7 @@ function OpenShiftPanel({
           <div>
             <h1 className="text-xl font-bold sm:text-2xl">Buka Shift</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Isi modal awal: kas fisik, saldo rekening (dari shift sebelumnya), dan modal tambahan.
+              Isi modal awal: kas fisik dan saldo rekening (dari shift sebelumnya).
             </p>
             {isBranchMissing && (
               <p className="mt-2 text-sm font-medium text-destructive">
@@ -219,12 +215,6 @@ function OpenShiftPanel({
               value={initial}
               onChange={setInitial}
               required
-            />
-            <MoneyInput
-              id="additional-capital"
-              label="Modal tambahan (opsional)"
-              value={additionalCapital}
-              onChange={setAdditionalCapital}
             />
           </div>
 
@@ -274,12 +264,15 @@ function OpenShiftPanel({
             </div>
           </section>
 
-          <div className="flex items-center justify-between rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Wallet className="size-4 text-primary" />
-              <span className="text-sm font-semibold text-primary">Modal awal</span>
+          <div className="space-y-2 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Kas fisik + Bank</span>
+              <span className="num text-sm font-semibold">{rupiah(fisikBankTotal)}</span>
             </div>
-            <span className="num text-lg font-bold gradient-text-gold">{rupiah(openingTotal)}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Saldo PPOB</span>
+              <span className="num text-sm font-semibold">{rupiah(ppobInitialsTotal)}</span>
+            </div>
           </div>
 
           <Button
@@ -408,13 +401,9 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
             </span>
             Shift aktif
           </h1>
-          <div className="mt-1.5 inline-flex items-center gap-2 rounded-lg border border-border/50 bg-secondary/40 px-3 py-1 text-xs text-muted-foreground backdrop-blur-sm">
-            <span className="num">Dibuka {new Date(shift.start_time).toLocaleString("id-ID")}</span>
-            <span className="text-border">·</span>
-            <span className="num font-semibold text-cash">
-              Modal awal {rupiah(shift.modal_awal)}
-            </span>
-          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Dibuka {new Date(shift.start_time).toLocaleString("id-ID")}
+          </p>
         </div>
         <Button asChild variant="outline" size="sm">
           <Link to="/close-shift">
@@ -435,126 +424,6 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
           </Button>
         </div>
       )}
-
-      {/* KPI Cards */}
-      <div className="responsive-grid-3">
-        <Kpi
-          label="Modal awal"
-          value={rupiah(shift.modal_awal)}
-          tone="cash"
-          icon={<Wallet className="size-5" />}
-        />
-        <Kpi
-          label="Laba berjalan (transaksi)"
-          value={rupiah(summary.profit)}
-          tone="success"
-          icon={<TrendingUp className="size-5" />}
-        />
-        <Kpi
-          label="Total transaksi"
-          value={String(summary.count)}
-          tone="digital"
-          icon={<Receipt className="size-5" />}
-        />
-      </div>
-
-      {/* Mutation Detail */}
-      <section className="glass-card p-5 sm:p-6">
-        <h2 className="text-lg font-bold">Mutasi shift ini</h2>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 sm:gap-3">
-          <MutRow
-            label="Total pokok"
-            value={rupiah(summary.principal)}
-            icon={<Banknote className="size-3.5 text-cash" />}
-          />
-          <MutRow
-            label="Fee pelanggan"
-            value={rupiah(summary.fees)}
-            icon={<Receipt className="size-3.5 text-primary" />}
-          />
-          <MutRow
-            label="Biaya provider"
-            value={rupiah(summary.providerCost)}
-            icon={<CreditCard className="size-3.5 text-destructive" />}
-          />
-          <MutRow
-            label="Kas masuk"
-            value={rupiah(summary.cashIn)}
-            icon={<ArrowDownLeft className="size-3.5 text-success" />}
-          />
-          <MutRow
-            label="Kas keluar"
-            value={rupiah(summary.cashOut)}
-            icon={<ArrowUpRight className="size-3.5 text-warning" />}
-          />
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function MutRow({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-2 rounded-xl border border-border/40 bg-secondary/20 px-3.5 py-2.5">
-      <div className="flex items-center gap-2">
-        {icon}
-        <dt className="text-xs text-muted-foreground sm:text-sm">{label}</dt>
-      </div>
-      <dd className="num text-xs font-semibold sm:text-sm">{value}</dd>
-    </div>
-  );
-}
-
-function Kpi({
-  label,
-  value,
-  tone,
-  icon,
-}: {
-  label: string;
-  value: string;
-  tone?: "cash" | "success" | "warning" | "digital";
-  icon?: React.ReactNode;
-}) {
-  const toneMap = {
-    cash: {
-      gradient: "gradient-text-gold",
-      iconBg: "bg-[oklch(0.82_0.16_82_/_0.15)]",
-      iconColor: "text-cash",
-    },
-    success: {
-      gradient: "gradient-text-emerald",
-      iconBg: "bg-[oklch(0.72_0.17_155_/_0.15)]",
-      iconColor: "text-success",
-    },
-    warning: {
-      gradient: "text-warning",
-      iconBg: "bg-[oklch(0.82_0.16_75_/_0.15)]",
-      iconColor: "text-warning",
-    },
-    digital: {
-      gradient: "gradient-text-cyan",
-      iconBg: "bg-[oklch(0.72_0.13_205_/_0.15)]",
-      iconColor: "text-digital",
-    },
-  };
-  const t = tone ? toneMap[tone] : null;
-
-  return (
-    <div className="ledger-card glass-card-hover p-5">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
-        {icon && t && (
-          <div
-            className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${t.iconBg}`}
-          >
-            <span className={t.iconColor}>{icon}</span>
-          </div>
-        )}
-      </div>
-      <p className={`num mt-3 text-xl font-bold sm:text-2xl ${t?.gradient ?? "text-foreground"}`}>
-        {value}
-      </p>
     </div>
   );
 }

@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/MoneyInput";
-import { BANKS, laba, modalAkhir, num, PPOB_PROVIDERS, rupiah } from "@/lib/ledger";
+import { BANKS, PPOB_PROVIDERS } from "@/lib/ledger";
 import { QueryError } from "@/components/QueryError";
 
 export const Route = createFileRoute("/_authenticated/close-shift")({
@@ -63,23 +63,17 @@ function CloseShift() {
   const shiftId = shiftQuery.data?.id;
 
   const [finalCash, setFinalCash] = useState("");
+  const [additionalCapital, setAdditionalCapital] = useState("");
   const [expenses, setExpenses] = useState("");
   const [expenseNotes, setExpenseNotes] = useState("");
   const [topup, setTopup] = useState("");
   const [deposit, setDeposit] = useState("");
+  const [settlement, setSettlement] = useState("");
   const [banks, setBanks] = useState<Record<string, string>>({});
   const [ppob, setPpob] = useState<Record<string, string>>({});
   const [ppobTopup, setPpobTopup] = useState<Record<string, string>>({});
   const [showConfirm, setShowConfirm] = useState(false);
   const submittingRef = useRef(false);
-
-  const modalAwal = num(shiftQuery.data?.modal_awal);
-  const modalAkhirValue = modalAkhir({
-    finalPhysical: Number(finalCash || 0),
-    bankFinals: BANKS.map((b) => Number(banks[b] || 0)),
-    ppobFinals: PPOB_PROVIDERS.map((p) => Number(ppob[p] || 0)),
-  });
-  const labaValue = laba(modalAkhirValue, modalAwal);
 
   const close = useMutation({
     mutationFn: async () => {
@@ -89,6 +83,8 @@ function CloseShift() {
       if (finalCash === "") throw new Error("Saldo fisik akhir wajib diisi");
       if (Number(finalCash) < 0) throw new Error("Saldo fisik akhir tidak boleh negatif");
       if (Number(deposit || 0) < 0) throw new Error("Setoran tidak boleh negatif");
+      if (Number(settlement || 0) < 0) throw new Error("Settlement tidak boleh negatif");
+      if (Number(additionalCapital || 0) < 0) throw new Error("Modal tambahan tidak boleh negatif");
 
       const bankSnapshots = BANKS.map((b) => ({
         bank_name: b,
@@ -103,10 +99,12 @@ function CloseShift() {
       const { error } = await supabase.rpc("close_shift_atomic", {
         _shift_id: shiftId,
         _final_cash: Number(finalCash || 0),
+        _additional_capital: Number(additionalCapital || 0),
         _expenses: Number(expenses || 0),
         _expense_notes: expenseNotes.trim() || null,
         _topup: Number(topup || 0),
         _deposit: Number(deposit || 0),
+        _settlement: Number(settlement || 0),
         _bank_snapshots: bankSnapshots,
         _ppob_snapshots: ppobSnapshots,
       });
@@ -197,36 +195,13 @@ function CloseShift() {
         </p>
       </div>
 
-      {/* Overview Cards */}
-      <div className="responsive-grid-3">
-        <div className="ledger-card p-5">
-          <p className="text-xs font-medium text-muted-foreground">Modal awal</p>
-          <p className="num mt-2 text-xl font-bold gradient-text-gold sm:text-2xl">
-            {rupiah(modalAwal)}
-          </p>
-        </div>
-        <div className="ledger-card p-5">
-          <p className="text-xs font-medium text-muted-foreground">Modal akhir</p>
-          <p className="num mt-2 text-xl font-bold gradient-text-cyan sm:text-2xl">
-            {rupiah(modalAkhirValue)}
-          </p>
-        </div>
-        <div className="ledger-card p-5">
-          <p className="text-xs font-medium text-muted-foreground">Laba (laba/rugi)</p>
-          <p className="num mt-2 text-xl font-bold gradient-text-emerald sm:text-2xl">
-            {rupiah(labaValue)}
-          </p>
-        </div>
-      </div>
-
       {/* Main Inputs */}
       <section className="glass-card p-5 sm:p-6 space-y-4">
         <h2 className="text-base font-bold flex items-center gap-2">
           <DollarSign className="size-4 text-primary" /> Kas Fisik, Pengeluaran & Setoran
         </h2>
         <p className="text-xs text-muted-foreground">
-          Pengeluaran, top-up, dan setoran hanya dicatat dan ditampilkan apa adanya — tidak
-          memengaruhi perhitungan modal akhir.
+          Lengkapi kas fisik, pengeluaran, top-up, setoran, dan settlement selama shift.
         </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MoneyInput
@@ -235,6 +210,12 @@ function CloseShift() {
             value={finalCash}
             onChange={setFinalCash}
             required
+          />
+          <MoneyInput
+            id="additional-capital"
+            label="Modal tambahan (opsional)"
+            value={additionalCapital}
+            onChange={setAdditionalCapital}
           />
           <MoneyInput
             id="expenses"
@@ -249,6 +230,12 @@ function CloseShift() {
             onChange={setTopup}
           />
           <MoneyInput id="deposit" label="Setoran ke owner" value={deposit} onChange={setDeposit} />
+          <MoneyInput
+            id="settlement"
+            label="Settlement (setel saldo)"
+            value={settlement}
+            onChange={setSettlement}
+          />
         </div>
         <div className="space-y-1.5 pt-2">
           <Label htmlFor="expense-notes" className="text-xs font-medium text-muted-foreground">

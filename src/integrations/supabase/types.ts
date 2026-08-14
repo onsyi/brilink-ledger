@@ -202,6 +202,7 @@ export type Database = {
           initial_physical_balance: number;
           modal_akhir: number | null;
           modal_awal: number | null;
+          settlement_amount: number;
           start_time: string;
           status: Database["public"]["Enums"]["shift_status"];
           topup_request: number;
@@ -221,6 +222,7 @@ export type Database = {
           initial_physical_balance?: number;
           modal_akhir?: number | null;
           modal_awal?: number | null;
+          settlement_amount?: number;
           start_time?: string;
           status?: Database["public"]["Enums"]["shift_status"];
           topup_request?: number;
@@ -240,6 +242,7 @@ export type Database = {
           initial_physical_balance?: number;
           modal_akhir?: number | null;
           modal_awal?: number | null;
+          settlement_amount?: number;
           start_time?: string;
           status?: Database["public"]["Enums"]["shift_status"];
           topup_request?: number;
@@ -379,10 +382,12 @@ export type Database = {
         Args: {
           _shift_id: string;
           _final_cash: number;
+          _additional_capital: number;
           _expenses: number;
           _expense_notes?: string | null;
           _topup: number;
           _deposit: number;
+          _settlement: number;
           _bank_snapshots: Json;
           _ppob_snapshots: Json;
         };
@@ -395,7 +400,6 @@ export type Database = {
           _user_id: string;
           _branch_id: string | null;
           _initial_cash: number;
-          _additional_capital: number;
           _bank_snapshots: Json;
           _ppob_snapshots: Json;
         };

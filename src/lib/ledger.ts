@@ -93,18 +93,16 @@ export function summarize(txns: LedgerTxn[]): ShiftSummary {
 }
 
 /**
- * Modal awal (opening capital): physical cash + additional capital +
- * opening balances of every bank & PPOB account.
+ * Modal awal (opening capital): physical cash + opening balances of every
+ * bank & PPOB account.
  */
 export function modalAwal(opts: {
   initialPhysical: number;
-  additionalCapital: number;
   bankInitials: number[];
   ppobInitials: number[];
 }) {
   return (
     opts.initialPhysical +
-    opts.additionalCapital +
     opts.bankInitials.reduce((s, n) => s + n, 0) +
     opts.ppobInitials.reduce((s, n) => s + n, 0)
   );
@@ -126,7 +124,28 @@ export function modalAkhir(opts: {
   );
 }
 
-/** Laba/rugi shift = modal akhir (gross) - modal awal. */
-export function laba(modalAkhir: number, modalAwal: number) {
-  return modalAkhir - modalAwal;
+/**
+ * Laba Fee (fee profit):
+ *   (Saldo Akhir + total saldo rekening AKHIR + Pengeluaran + settlement)
+ *   - (Saldo Awal + total saldo rekening AWAL + Penambahan Saldo)
+ * where "Penambahan Saldo" is the top-up request amount.
+ */
+export function labaFee(opts: {
+  initialPhysical: number;
+  finalPhysical: number;
+  bankInitials: number[];
+  bankFinals: number[];
+  expenses: number;
+  settlement: number;
+  topup: number;
+}) {
+  const bankInitialTotal = opts.bankInitials.reduce((s, n) => s + n, 0);
+  const bankFinalTotal = opts.bankFinals.reduce((s, n) => s + n, 0);
+  return (
+    opts.finalPhysical +
+    bankFinalTotal +
+    opts.expenses +
+    opts.settlement -
+    (opts.initialPhysical + bankInitialTotal + opts.topup)
+  );
 }
