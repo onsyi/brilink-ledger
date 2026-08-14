@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { num, rupiah, summarize } from "@/lib/ledger";
+import { num, rupiah } from "@/lib/ledger";
 import { QueryError } from "@/components/QueryError";
 
 export function OwnerOverview({ username }: { username?: string | null }) {
@@ -37,7 +37,9 @@ export function OwnerOverview({ username }: { username?: string | null }) {
     queryFn: async () => {
       let query = supabase
         .from("shifts")
-        .select("id, user_id, start_time, initial_physical_balance, status, branch_id")
+        .select(
+          "id, user_id, start_time, initial_physical_balance, status, branch_id, modal_awal, modal_akhir",
+        )
         .order("start_time", { ascending: false })
         .limit(60);
       if (branchFilter !== "all") {
@@ -48,33 +50,31 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       const ids = (shifts ?? []).map((s) => s.id);
       const [{ data: txns }, { data: profiles }] = await Promise.all([
         ids.length
-          ? supabase
-              .from("transactions")
-              .select(
-                "shift_id, transaction_type, source_account, destination_account, principal_amount, customer_fee, provider_cost, profit_net",
-              )
-              .in("shift_id", ids)
+          ? supabase.from("transactions").select("shift_id").in("shift_id", ids)
           : Promise.resolve({ data: [] as never[] }),
         supabase.from("profiles").select("id, username"),
       ]);
       const nameOf = (id: string) => (profiles ?? []).find((p) => p.id === id)?.username ?? "kasir";
-      const txnsByShift = new Map<string, typeof txns>();
+      const txnCountByShift = new Map<string, number>();
       (txns ?? []).forEach((t) => {
-        const arr = txnsByShift.get(t.shift_id) ?? [];
-        arr.push(t);
-        txnsByShift.set(t.shift_id, arr);
+        txnCountByShift.set(t.shift_id, (txnCountByShift.get(t.shift_id) ?? 0) + 1);
       });
-      const rows = (shifts ?? []).map((s) => {
-        const own = txnsByShift.get(s.id) ?? [];
-        return { shift: s, summary: summarize(own), cashier: nameOf(s.user_id) };
-      });
+      const rows = (shifts ?? []).map((s) => ({
+        shift: s,
+        txnCount: txnCountByShift.get(s.id) ?? 0,
+        cashier: nameOf(s.user_id),
+      }));
       const today = new Date().toLocaleDateString("id-ID");
       return {
         rows,
         open: rows.filter((r) => r.shift.status === "open"),
         profitToday: rows
-          .filter((r) => new Date(r.shift.start_time).toLocaleDateString("id-ID") === today)
-          .reduce((s, r) => s + r.summary.profit, 0),
+          .filter(
+            (r) =>
+              r.shift.status === "closed" &&
+              new Date(r.shift.start_time).toLocaleDateString("id-ID") === today,
+          )
+          .reduce((s, r) => s + num(r.shift.modal_akhir), 0),
         cashiers: new Set(rows.map((r) => r.shift.user_id)).size,
       };
     },
@@ -198,15 +198,11 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                 </div>
                 <div className="num mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
                   <span className="text-muted-foreground">
-                    Modal{" "}
-                    <span className="font-semibold text-cash">
-                      {rupiah(r.shift.initial_physical_balance)}
-                    </span>
+                    Modal awal{" "}
+                    <span className="font-semibold text-cash">{rupiah(r.shift.modal_awal)}</span>
                   </span>
-                  <span className="text-muted-foreground">{r.summary.count} transaksi</span>
-                  <span className="font-semibold text-success">
-                    Laba {rupiah(r.summary.profit)}
-                  </span>
+                  <span className="text-muted-foreground">{r.txnCount} transaksi</span>
+                  <span className="font-semibold text-muted-foreground">Laba —</span>
                 </div>
               </li>
             ))}
@@ -248,9 +244,9 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                   <td className="py-3 text-left text-muted-foreground">
                     {new Date(r.shift.start_time).toLocaleDateString("id-ID")}
                   </td>
-                  <td className="py-3 text-right">{r.summary.count}</td>
+                  <td className="py-3 text-right">{r.txnCount}</td>
                   <td className="py-3 text-right font-semibold text-success">
-                    {rupiah(r.summary.profit)}
+                    {r.shift.modal_akhir !== null ? rupiah(r.shift.modal_akhir) : "—"}
                   </td>
                   <td className="py-3 text-right">
                     <span

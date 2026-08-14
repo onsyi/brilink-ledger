@@ -10,13 +10,11 @@ import {
   Calendar,
   Building2,
   Receipt,
-  CheckCircle2,
-  AlertTriangle,
   Clock,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { expectedCash, num, rupiah, summarize } from "@/lib/ledger";
+import { num, rupiah } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
 import { QueryError } from "@/components/QueryError";
 
@@ -84,7 +82,7 @@ function Reports() {
       let query = supabase
         .from("shifts")
         .select(
-          "id, user_id, start_time, initial_physical_balance, total_expenses, expense_notes, final_physical_balance, deposit_amount, deposit_confirmed, topup_request, status, branch_id",
+          "id, user_id, start_time, modal_awal, modal_akhir, total_expenses, expense_notes, final_physical_balance, deposit_amount, deposit_confirmed, topup_request, status, branch_id",
         )
         .order("start_time", { ascending: false })
         .limit(60);
@@ -97,67 +95,41 @@ function Reports() {
       if (error) throw error;
       const ids = (shiftRows ?? []).map((s) => s.id);
       if (ids.length === 0) return [];
-      const [{ data: txns }, { data: profiles }, { data: receivables }] = await Promise.all([
-        supabase
-          .from("transactions")
-          .select(
-            "shift_id, transaction_type, source_account, destination_account, principal_amount, customer_fee, provider_cost, profit_net",
-          )
-          .in("shift_id", ids),
-        supabase.from("profiles").select("id, username"),
-        supabase
-          .from("receivables")
-          .select("shift_id, debt_amount")
-          .eq("status", "pending")
-          .in("shift_id", ids),
+      const [{ data: txns }, { data: profiles }, { data: allBranches }] = await Promise.all([
+        supabase.from("transactions").select("shift_id").in("shift_id", ids),
+        supabase.from("profiles").select("id, username, branch_id"),
+        supabase.from("branches").select("id, name"),
       ]);
-      const debtByShift = new Map<string, number>();
-      (receivables ?? []).forEach((r) => {
-        debtByShift.set(r.shift_id, (debtByShift.get(r.shift_id) ?? 0) + num(r.debt_amount));
-      });
-      const txnsByShift = new Map<string, typeof txns>();
+      const branchNameOf = new Map<string, string>();
+      (allBranches ?? []).forEach((b) => branchNameOf.set(b.id, b.name));
+      const txnCountByShift = new Map<string, number>();
       (txns ?? []).forEach((t) => {
-        const arr = txnsByShift.get(t.shift_id) ?? [];
-        arr.push(t);
-        txnsByShift.set(t.shift_id, arr);
+        txnCountByShift.set(t.shift_id, (txnCountByShift.get(t.shift_id) ?? 0) + 1);
       });
       return (shiftRows ?? [])
         .filter((s) => filterByPeriod(s.start_time, periodFilter))
-        .map((s) => {
-          const own = txnsByShift.get(s.id) ?? [];
-          const summary = summarize(own);
-          const expected = expectedCash({
-            initial: num(s.initial_physical_balance),
-            cashNet: summary.cashNet,
-            pendingReceivables: debtByShift.get(s.id) ?? 0,
-            expenses: num(s.total_expenses),
-          });
-          return {
-            shift: s,
-            summary,
-            expected,
-            variance:
-              s.final_physical_balance === null ? null : num(s.final_physical_balance) - expected,
-            cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
-          };
-        });
+        .map((s) => ({
+          shift: s,
+          txnCount: txnCountByShift.get(s.id) ?? 0,
+          cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
+          branchName: (s.branch_id && branchNameOf.get(s.branch_id)) || "—",
+        }));
     },
   });
 
   const rows = useMemo(() => shifts.data ?? [], [shifts.data]);
-  const totalProfit = rows.reduce((s, r) => s + r.summary.profit, 0);
+  const totalProfit = rows.reduce((s, r) => s + num(r.shift.modal_akhir), 0);
   const totalDeposit = rows.reduce((s, r) => s + num(r.shift.deposit_amount), 0);
 
-  const todayStats = useMemo(() => {
-    const todayRows = rows.filter((r) => filterByPeriod(r.shift.start_time, periodFilter));
+  const periodStats = useMemo(() => {
     return {
-      count: todayRows.length,
-      profit: todayRows.reduce((s, r) => s + r.summary.profit, 0),
-      txn: todayRows.reduce((s, r) => s + r.summary.count, 0),
-      deposit: todayRows.reduce((s, r) => s + num(r.shift.deposit_amount), 0),
-      open: todayRows.filter((r) => r.shift.status === "open").length,
+      count: rows.length,
+      profit: rows.reduce((s, r) => s + num(r.shift.modal_akhir), 0),
+      txn: rows.reduce((s, r) => s + r.txnCount, 0),
+      deposit: rows.reduce((s, r) => s + num(r.shift.deposit_amount), 0),
+      open: rows.filter((r) => r.shift.status === "open").length,
     };
-  }, [rows, periodFilter]);
+  }, [rows]);
 
   const periodLabel =
     periodFilter === "today"
@@ -170,14 +142,17 @@ function Reports() {
 
   // Data points for SVG chart (chronological order)
   const chartPoints = useMemo(() => {
-    const sorted = [...rows].reverse().slice(-12);
-    const maxVal = Math.max(...sorted.map((r) => r.summary.profit), 10000);
-    return sorted.map((r, i) => {
-      const height = Math.max(15, Math.round((r.summary.profit / maxVal) * 100));
+    const sorted = [...rows]
+      .filter((r) => r.shift.modal_akhir !== null)
+      .reverse()
+      .slice(-12);
+    const maxVal = Math.max(...sorted.map((r) => num(r.shift.modal_akhir)), 10000);
+    return sorted.map((r) => {
+      const height = Math.max(15, Math.round((num(r.shift.modal_akhir) / maxVal) * 100));
       return {
         id: r.shift.id,
         height,
-        profit: r.summary.profit,
+        profit: num(r.shift.modal_akhir),
         date: new Date(r.shift.start_time).toLocaleDateString("id-ID", {
           day: "numeric",
           month: "short",
@@ -259,7 +234,7 @@ function Reports() {
       {/* Stats Summary Cards */}
       <div className="responsive-grid-3">
         <Stat
-          label="Total laba bersih"
+          label="Total modal akhir"
           value={rupiah(totalProfit)}
           icon={<TrendingUp className="size-5" />}
           gradient="gradient-text-emerald"
@@ -274,7 +249,7 @@ function Reports() {
         />
         <Stat
           label="Total transaksi"
-          value={String(todayStats.txn)}
+          value={String(periodStats.txn)}
           icon={<Receipt className="size-5" />}
           gradient="gradient-text-cyan"
           iconBg="bg-[oklch(0.72_0.13_205_/_0.15)] text-digital"
@@ -286,7 +261,7 @@ function Reports() {
         <section className="glass-card p-5 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-bold">Grafik Laba Bersih Shift</h2>
+              <h2 className="text-base font-bold">Grafik Modal Akhir Shift</h2>
               <p className="text-xs text-muted-foreground">
                 Tren performa {chartPoints.length} shift terakhir
               </p>
@@ -342,89 +317,73 @@ function Reports() {
                 <tr className="border-b border-border/60 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
                   <th className="pb-3">Shift & Mulai</th>
                   <th className="pb-3">Kasir</th>
+                  <th className="pb-3">Cabang</th>
                   <th className="pb-3 text-right">Modal Awal</th>
                   <th className="pb-3 text-right">Saldo Fisik</th>
-                  <th className="pb-3 text-right">Selisih (Variance)</th>
                   <th className="pb-3 text-right">Pengeluaran</th>
                   <th className="pb-3 text-right">Setoran</th>
-                  <th className="pb-3 text-right">Laba Bersih</th>
+                  <th className="pb-3 text-right">Modal Akhir</th>
                   <th className="pb-3 text-center">Status</th>
                 </tr>
               </thead>
               <tbody className="num">
-                {rows.map((r) => {
-                  const hasVariance = r.variance !== null && Math.abs(r.variance) > 500;
-                  return (
-                    <tr
-                      key={r.shift.id}
-                      className="border-b border-border/30 transition-colors hover:bg-secondary/30"
-                    >
-                      <td className="py-3.5 font-medium">
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <Clock className="size-3.5 text-muted-foreground" />
-                          <span>
-                            {new Date(r.shift.start_time).toLocaleString("id-ID", {
-                              day: "numeric",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3.5 font-medium">{r.cashier}</td>
-                      <td className="py-3.5 text-right font-medium text-cash">
-                        {rupiah(r.shift.initial_physical_balance)}
-                      </td>
-                      <td className="py-3.5 text-right font-medium">
-                        {r.shift.final_physical_balance !== null
-                          ? rupiah(r.shift.final_physical_balance)
-                          : "—"}
-                      </td>
-                      <td className="py-3.5 text-right">
-                        {r.variance === null ? (
-                          <span className="text-muted-foreground">—</span>
-                        ) : hasVariance ? (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-destructive/15 px-2 py-0.5 text-xs font-bold text-destructive">
-                            <AlertTriangle className="size-3" />
-                            {rupiah(r.variance)}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-success">
-                            <CheckCircle2 className="size-3" /> 0
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3.5 text-right text-destructive">
-                        {rupiah(r.shift.total_expenses)}
-                      </td>
-                      <td className="py-3.5 text-right font-medium">
-                        <span className={r.shift.deposit_confirmed ? "text-success" : "text-cash"}>
-                          {rupiah(r.shift.deposit_amount)}
+                {rows.map((r) => (
+                  <tr
+                    key={r.shift.id}
+                    className="border-b border-border/30 transition-colors hover:bg-secondary/30"
+                  >
+                    <td className="py-3.5 font-medium">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <Clock className="size-3.5 text-muted-foreground" />
+                        <span>
+                          {new Date(r.shift.start_time).toLocaleString("id-ID", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </span>
-                        {r.shift.deposit_confirmed && (
-                          <span className="ml-1 inline-flex items-center rounded-full bg-success/15 px-1.5 py-0.5 text-[9px] font-bold text-success">
-                            OK
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3.5 text-right font-bold text-success">
-                        {rupiah(r.summary.profit)}
-                      </td>
-                      <td className="py-3.5 text-center">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                            r.shift.status === "open"
-                              ? "bg-success/15 text-success border border-success/25"
-                              : "bg-secondary text-muted-foreground"
-                          }`}
-                        >
-                          {r.shift.status === "open" ? "Aktif" : "Ditutup"}
+                      </div>
+                    </td>
+                    <td className="py-3.5 font-medium">{r.cashier}</td>
+                    <td className="py-3.5 text-muted-foreground text-xs">{r.branchName}</td>
+                    <td className="py-3.5 text-right font-medium text-cash">
+                      {rupiah(r.shift.modal_awal)}
+                    </td>
+                    <td className="py-3.5 text-right font-medium">
+                      {r.shift.final_physical_balance !== null
+                        ? rupiah(r.shift.final_physical_balance)
+                        : "—"}
+                    </td>
+                    <td className="py-3.5 text-right text-destructive">
+                      {rupiah(r.shift.total_expenses)}
+                    </td>
+                    <td className="py-3.5 text-right font-medium">
+                      <span className={r.shift.deposit_confirmed ? "text-success" : "text-cash"}>
+                        {rupiah(r.shift.deposit_amount)}
+                      </span>
+                      {r.shift.deposit_confirmed && (
+                        <span className="ml-1 inline-flex items-center rounded-full bg-success/15 px-1.5 py-0.5 text-[9px] font-bold text-success">
+                          OK
                         </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      )}
+                    </td>
+                    <td className="py-3.5 text-right font-bold text-success">
+                      {r.shift.modal_akhir !== null ? rupiah(r.shift.modal_akhir) : "—"}
+                    </td>
+                    <td className="py-3.5 text-center">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                          r.shift.status === "open"
+                            ? "bg-success/15 text-success border border-success/25"
+                            : "bg-secondary text-muted-foreground"
+                        }`}
+                      >
+                        {r.shift.status === "open" ? "Aktif" : "Ditutup"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

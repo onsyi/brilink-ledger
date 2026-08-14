@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   PlayCircle,
@@ -14,13 +14,14 @@ import {
   ArrowUpRight,
   CreditCard,
   TriangleAlert,
+  Building2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { MoneyInput } from "@/components/MoneyInput";
 import { OwnerOverview } from "@/components/OwnerOverview";
-import { expectedCash, num, rupiah, summarize } from "@/lib/ledger";
+import { BANKS, modalAwal, num, PPOB_PROVIDERS, rupiah, summarize } from "@/lib/ledger";
 import { QueryError } from "@/components/QueryError";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -45,7 +46,9 @@ function Dashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("shifts")
-        .select("id, user_id, start_time, initial_physical_balance, total_expenses, status")
+        .select(
+          "id, user_id, start_time, initial_physical_balance, total_expenses, status, modal_awal",
+        )
         .eq("user_id", userId!)
         .eq("status", "open")
         .maybeSingle();
@@ -85,6 +88,11 @@ function OpenShiftPanel({
 }) {
   const queryClient = useQueryClient();
   const [initial, setInitial] = useState("");
+  const [additionalCapital, setAdditionalCapital] = useState("");
+  const [banks, setBanks] = useState<Record<string, string>>({});
+  const [ppob, setPpob] = useState<Record<string, string>>({});
+  const [hydrated, setHydrated] = useState(false);
+  const isBranchMissing = !branchId;
 
   const lastShift = useQuery({
     queryKey: ["last-closed-shift", userId],
@@ -113,13 +121,48 @@ function OpenShiftPanel({
     },
   });
 
+  useEffect(() => {
+    if (hydrated || lastShift.isLoading) return;
+    const prev = lastShift.data;
+    const bankMap: Record<string, string> = {};
+    for (const b of BANKS) {
+      const prevBank = prev?.banks.find((x) => x.bank_name === b);
+      bankMap[b] = prevBank ? String(num(prevBank.final_amount) || "") : "";
+    }
+    const ppobMap: Record<string, string> = {};
+    for (const p of PPOB_PROVIDERS) {
+      const prevPpob = prev?.ppob.find((x) => x.provider_name === p);
+      ppobMap[p] = prevPpob ? String(num(prevPpob.final_amount) || "") : "";
+    }
+    setBanks(bankMap);
+    setPpob(ppobMap);
+    setHydrated(true);
+  }, [hydrated, lastShift.isLoading, lastShift.data]);
+
+  const openingTotal = modalAwal({
+    initialPhysical: num(initial),
+    additionalCapital: num(additionalCapital),
+    bankInitials: BANKS.map((b) => num(banks[b])),
+    ppobInitials: PPOB_PROVIDERS.map((p) => num(ppob[p])),
+  });
+
   const openShift = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("shifts").insert({
-        user_id: userId!,
-        initial_physical_balance: Number(initial || 0),
-        status: "open",
-        branch_id: branchId ?? null,
+      const bankSnapshots = BANKS.map((b) => ({
+        bank_name: b,
+        initial_amount: Number(banks[b] || 0),
+      }));
+      const ppobSnapshots = PPOB_PROVIDERS.map((p) => ({
+        provider_name: p,
+        initial_amount: Number(ppob[p] || 0),
+      }));
+      const { error } = await supabase.rpc("open_shift_atomic", {
+        _user_id: userId!,
+        _branch_id: branchId ?? null,
+        _initial_cash: Number(initial || 0),
+        _additional_capital: Number(additionalCapital || 0),
+        _bank_snapshots: bankSnapshots,
+        _ppob_snapshots: ppobSnapshots,
       });
       if (error) throw error;
     },
@@ -129,7 +172,7 @@ function OpenShiftPanel({
     },
     onError: (e: Error & { code?: string }) =>
       toast.error(
-        e.code === "23505" || e.message.includes("duplicate")
+        e.code === "23505" || e.message.includes("duplicate") || e.message.includes("aktif")
           ? "Masih ada shift aktif di akun ini. Tutup dulu shift tersebut."
           : e.message,
       ),
@@ -140,7 +183,7 @@ function OpenShiftPanel({
     (lastShift.data?.ppob.reduce((s, p) => s + num(p.final_amount), 0) ?? 0);
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
+    <div className="grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
       {/* Open Shift Card */}
       <section className="glass-card glass-card-hover p-6 sm:p-8">
         <div className="flex items-start gap-3">
@@ -150,8 +193,14 @@ function OpenShiftPanel({
           <div>
             <h1 className="text-xl font-bold sm:text-2xl">Buka Shift</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Tidak ada shift aktif. Isi modal kas fisik di laci untuk memulai.
+              Isi modal awal: kas fisik, saldo rekening (dari shift sebelumnya), dan modal tambahan.
             </p>
+            {isBranchMissing && (
+              <p className="mt-2 text-sm font-medium text-destructive">
+                Akun Anda belum terdaftar di cabang manapun. Hubungi owner untuk assign cabang
+                terlebih dahulu.
+              </p>
+            )}
           </div>
         </div>
         <form
@@ -161,14 +210,72 @@ function OpenShiftPanel({
             openShift.mutate();
           }}
         >
-          <MoneyInput
-            id="initial"
-            label="Saldo Fisik Awal (kas di laci)"
-            value={initial}
-            onChange={setInitial}
-            required
-          />
-          <Button type="submit" className="w-full" size="lg" disabled={openShift.isPending}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <MoneyInput
+              id="initial"
+              label="Modal awal uang fisik (kas di laci)"
+              value={initial}
+              onChange={setInitial}
+              required
+            />
+            <MoneyInput
+              id="additional-capital"
+              label="Modal tambahan (opsional)"
+              value={additionalCapital}
+              onChange={setAdditionalCapital}
+            />
+          </div>
+
+          <section className="rounded-xl border border-border/40 bg-secondary/20 p-4">
+            <div className="flex items-center gap-2">
+              <Building2 className="size-4 text-digital" />
+              <h2 className="text-sm font-bold">Saldo awal rekening (Bank)</h2>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {BANKS.map((b) => (
+                <MoneyInput
+                  key={b}
+                  id={`open-bank-${b}`}
+                  label={b}
+                  value={banks[b] ?? ""}
+                  onChange={(v) => setBanks((prev) => ({ ...prev, [b]: v }))}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-border/40 bg-secondary/20 p-4">
+            <div className="flex items-center gap-2">
+              <CreditCard className="size-4 text-accent" />
+              <h2 className="text-sm font-bold">Saldo awal PPOB</h2>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {PPOB_PROVIDERS.map((p) => (
+                <MoneyInput
+                  key={p}
+                  id={`open-ppob-${p}`}
+                  label={p}
+                  value={ppob[p] ?? ""}
+                  onChange={(v) => setPpob((prev) => ({ ...prev, [p]: v }))}
+                />
+              ))}
+            </div>
+          </section>
+
+          <div className="flex items-center justify-between rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Wallet className="size-4 text-primary" />
+              <span className="text-sm font-semibold text-primary">Modal awal</span>
+            </div>
+            <span className="num text-lg font-bold gradient-text-gold">{rupiah(openingTotal)}</span>
+          </div>
+
+          <Button
+            type="submit"
+            className="w-full"
+            size="lg"
+            disabled={openShift.isPending || isBranchMissing}
+          >
             {openShift.isPending ? (
               <Loader2 className="mr-2 size-4 animate-spin" />
             ) : (
@@ -188,7 +295,7 @@ function OpenShiftPanel({
           <div>
             <h2 className="text-lg font-bold">Saldo digital sebelumnya</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Dari snapshot penutupan terakhir.
+              Dari snapshot penutupan terakhir. Terisi otomatis ke form di samping.
             </p>
           </div>
         </div>
@@ -256,6 +363,7 @@ type ShiftRow = {
   initial_physical_balance: number | string;
   total_expenses: number | string;
   start_time: string;
+  modal_awal: number | string | null;
 };
 
 function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow }) {
@@ -274,27 +382,7 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
     },
   });
 
-  const pendingReceivables = useQuery({
-    queryKey: ["pending-receivables", shiftId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("receivables")
-        .select("debt_amount")
-        .eq("shift_id", shiftId)
-        .eq("status", "pending");
-      if (error) throw error;
-      return (data ?? []).reduce((sum, r) => sum + num(r.debt_amount), 0);
-    },
-  });
-
   const summary = summarize(txns.data ?? []);
-
-  const expected = expectedCash({
-    initial: num(shift.initial_physical_balance),
-    cashNet: summary.cashNet,
-    pendingReceivables: pendingReceivables.data ?? 0,
-    expenses: num(shift.total_expenses),
-  });
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -312,7 +400,7 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
             <span className="num">Dibuka {new Date(shift.start_time).toLocaleString("id-ID")}</span>
             <span className="text-border">·</span>
             <span className="num font-semibold text-cash">
-              Modal {rupiah(shift.initial_physical_balance)}
+              Modal awal {rupiah(shift.modal_awal)}
             </span>
           </div>
         </div>
@@ -324,21 +412,13 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
       </div>
 
       {/* Data Load Errors */}
-      {(txns.isError || pendingReceivables.isError) && (
+      {txns.isError && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm backdrop-blur-sm">
           <TriangleAlert className="size-5 shrink-0 text-destructive" />
           <span className="text-muted-foreground">
             Gagal memuat sebagian data shift. Angka di bawah mungkin tidak akurat.
           </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="ml-auto"
-            onClick={() => {
-              txns.refetch();
-              pendingReceivables.refetch();
-            }}
-          >
+          <Button size="sm" variant="outline" className="ml-auto" onClick={() => txns.refetch()}>
             Coba lagi
           </Button>
         </div>
@@ -347,13 +427,13 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
       {/* KPI Cards */}
       <div className="responsive-grid-3">
         <Kpi
-          label="Ekspektasi kas fisik"
-          value={rupiah(expected)}
+          label="Modal awal"
+          value={rupiah(shift.modal_awal)}
           tone="cash"
           icon={<Wallet className="size-5" />}
         />
         <Kpi
-          label="Laba bersih shift"
+          label="Laba berjalan (transaksi)"
           value={rupiah(summary.profit)}
           tone="success"
           icon={<TrendingUp className="size-5" />}
@@ -394,11 +474,6 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: ShiftRow
             label="Kas keluar"
             value={rupiah(summary.cashOut)}
             icon={<ArrowUpRight className="size-3.5 text-warning" />}
-          />
-          <MutRow
-            label="Pengeluaran"
-            value={rupiah(shift.total_expenses)}
-            icon={<Wallet className="size-3.5 text-destructive" />}
           />
         </div>
       </section>

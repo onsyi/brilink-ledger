@@ -38,6 +38,7 @@ export type Database = {
           created_at: string;
           final_amount: number;
           id: string;
+          initial_amount: number;
           shift_id: string;
         };
         Insert: {
@@ -45,6 +46,7 @@ export type Database = {
           created_at?: string;
           final_amount?: number;
           id?: string;
+          initial_amount?: number;
           shift_id: string;
         };
         Update: {
@@ -52,6 +54,7 @@ export type Database = {
           created_at?: string;
           final_amount?: number;
           id?: string;
+          initial_amount?: number;
           shift_id?: string;
         };
         Relationships: [
@@ -69,22 +72,28 @@ export type Database = {
           created_at: string;
           final_amount: number;
           id: string;
+          initial_amount: number;
           provider_name: string;
           shift_id: string;
+          topup_amount: number;
         };
         Insert: {
           created_at?: string;
           final_amount?: number;
           id?: string;
+          initial_amount?: number;
           provider_name: string;
           shift_id: string;
+          topup_amount?: number;
         };
         Update: {
           created_at?: string;
           final_amount?: number;
           id?: string;
+          initial_amount?: number;
           provider_name?: string;
           shift_id?: string;
+          topup_amount?: number;
         };
         Relationships: [
           {
@@ -181,6 +190,7 @@ export type Database = {
       };
       shifts: {
         Row: {
+          additional_capital: number;
           branch_id: string | null;
           created_at: string;
           deposit_amount: number;
@@ -190,6 +200,8 @@ export type Database = {
           final_physical_balance: number | null;
           id: string;
           initial_physical_balance: number;
+          modal_akhir: number | null;
+          modal_awal: number | null;
           start_time: string;
           status: Database["public"]["Enums"]["shift_status"];
           topup_request: number;
@@ -197,6 +209,7 @@ export type Database = {
           user_id: string;
         };
         Insert: {
+          additional_capital?: number;
           branch_id?: string | null;
           created_at?: string;
           deposit_amount?: number;
@@ -206,6 +219,8 @@ export type Database = {
           final_physical_balance?: number | null;
           id?: string;
           initial_physical_balance?: number;
+          modal_akhir?: number | null;
+          modal_awal?: number | null;
           start_time?: string;
           status?: Database["public"]["Enums"]["shift_status"];
           topup_request?: number;
@@ -213,6 +228,7 @@ export type Database = {
           user_id: string;
         };
         Update: {
+          additional_capital?: number;
           branch_id?: string | null;
           created_at?: string;
           deposit_amount?: number;
@@ -222,6 +238,8 @@ export type Database = {
           final_physical_balance?: number | null;
           id?: string;
           initial_physical_balance?: number;
+          modal_akhir?: number | null;
+          modal_awal?: number | null;
           start_time?: string;
           status?: Database["public"]["Enums"]["shift_status"];
           topup_request?: number;
@@ -357,8 +375,32 @@ export type Database = {
         };
         Returns: boolean;
       };
+      close_shift_atomic: {
+        Args: {
+          _shift_id: string;
+          _final_cash: number;
+          _expenses: number;
+          _expense_notes?: string | null;
+          _topup: number;
+          _deposit: number;
+          _bank_snapshots: Json;
+          _ppob_snapshots: Json;
+        };
+        Returns: void;
+      };
       shift_is_readable: { Args: { _shift_id: string }; Returns: boolean };
       shift_is_writable: { Args: { _shift_id: string }; Returns: boolean };
+      open_shift_atomic: {
+        Args: {
+          _user_id: string;
+          _branch_id: string | null;
+          _initial_cash: number;
+          _additional_capital: number;
+          _bank_snapshots: Json;
+          _ppob_snapshots: Json;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       app_role: "owner" | "cashier";

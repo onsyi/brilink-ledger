@@ -2,7 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, Wallet, ArrowDownRight, Clock, ShieldCheck } from "lucide-react";
+import {
+  CheckCircle2,
+  Loader2,
+  Wallet,
+  ArrowDownRight,
+  Clock,
+  ShieldCheck,
+  Building2,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -28,15 +36,30 @@ function Deposits() {
   const { user, role, loading: authLoading } = useAuth();
   const isOwner = role === "owner";
   const queryClient = useQueryClient();
+  const [branchFilter, setBranchFilter] = useState<string>("all");
+
+  const branches = useQuery({
+    queryKey: ["branches"],
+    enabled: isOwner,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("branches")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const shifts = useQuery({
-    queryKey: ["deposit-shifts", user?.id, role],
+    queryKey: ["deposit-shifts", user?.id, role, branchFilter],
     enabled: !!user?.id && !authLoading,
     queryFn: async () => {
       let query = supabase
         .from("shifts")
         .select(
-          "id, user_id, start_time, end_time, final_physical_balance, deposit_amount, deposit_confirmed, profiles!shifts_user_id_fkey(username)",
+          "id, user_id, start_time, end_time, final_physical_balance, deposit_amount, deposit_confirmed, branch_id, profiles!shifts_user_id_fkey(username)",
         )
         .eq("status", "closed")
         .gt("deposit_amount", 0)
@@ -46,6 +69,8 @@ function Deposits() {
 
       if (!isOwner) {
         query = query.eq("user_id", user!.id);
+      } else if (isOwner && branchFilter !== "all") {
+        query = query.eq("branch_id", branchFilter);
       }
 
       const { data, error } = await query;
@@ -91,6 +116,25 @@ function Deposits() {
               ? "Dokumentasi serah terima uang fisik dari kasir kepada pemilik."
               : "Riwayat setoran uang fisik yang telah Anda serahkan kepada owner."}
           </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {isOwner && branches.data && branches.data.length > 0 && (
+            <div className="relative">
+              <Building2 className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <select
+                value={branchFilter}
+                onChange={(e) => setBranchFilter(e.target.value)}
+                className="h-8 appearance-none rounded-xl border border-border/60 bg-secondary/60 py-1 pl-8 pr-3 text-xs font-medium backdrop-blur-sm transition-colors hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="all">Semua Cabang</option>
+                {branches.data.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 

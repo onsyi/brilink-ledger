@@ -1,18 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Loader2,
   ClipboardCheck,
-  TriangleAlert,
-  CheckCircle2,
-  Wallet,
-  TrendingUp,
   CreditCard,
   Building2,
   ArrowRight,
-  Sparkles,
   DollarSign,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/MoneyInput";
-import { BANKS, PPOB_PROVIDERS, expectedCash, num, rupiah, summarize } from "@/lib/ledger";
+import { BANKS, modalAkhir, num, PPOB_PROVIDERS, rupiah } from "@/lib/ledger";
 import { QueryError } from "@/components/QueryError";
 
 export const Route = createFileRoute("/_authenticated/close-shift")({
@@ -36,7 +31,7 @@ export const Route = createFileRoute("/_authenticated/close-shift")({
       { property: "og:title", content: "Tutup Shift — Kasir BRILink" },
       {
         property: "og:description",
-        content: "Kalkulasi expected balance dan peringatan selisih kas otomatis.",
+        content: "Kalkulasi modal akhir (aset akhir dikurangi modal awal) otomatis.",
       },
     ],
   }),
@@ -56,7 +51,7 @@ function CloseShift() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("shifts")
-        .select("id, user_id, start_time, initial_physical_balance, status")
+        .select("id, user_id, start_time, status, modal_awal")
         .eq("user_id", userId!)
         .eq("status", "open")
         .maybeSingle();
@@ -67,35 +62,6 @@ function CloseShift() {
 
   const shiftId = shiftQuery.data?.id;
 
-  const txns = useQuery({
-    queryKey: ["txns", shiftId],
-    enabled: !!shiftId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select(
-          "transaction_type, source_account, destination_account, principal_amount, customer_fee, provider_cost, profit_net",
-        )
-        .eq("shift_id", shiftId!);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  const pendingReceivables = useQuery({
-    queryKey: ["pending-receivables", shiftId],
-    enabled: !!shiftId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("receivables")
-        .select("debt_amount")
-        .eq("shift_id", shiftId!)
-        .eq("status", "pending");
-      if (error) throw error;
-      return (data ?? []).reduce((sum, r) => sum + num(r.debt_amount), 0);
-    },
-  });
-
   const [finalCash, setFinalCash] = useState("");
   const [expenses, setExpenses] = useState("");
   const [expenseNotes, setExpenseNotes] = useState("");
@@ -103,22 +69,21 @@ function CloseShift() {
   const [deposit, setDeposit] = useState("");
   const [banks, setBanks] = useState<Record<string, string>>({});
   const [ppob, setPpob] = useState<Record<string, string>>({});
+  const [ppobTopup, setPpobTopup] = useState<Record<string, string>>({});
   const [showConfirm, setShowConfirm] = useState(false);
   const submittingRef = useRef(false);
 
-  const summary = useMemo(() => summarize(txns.data ?? []), [txns.data]);
-  const pendingDebt = pendingReceivables.data ?? 0;
-
-  const expected = shiftQuery.data
-    ? expectedCash({
-        initial: num(shiftQuery.data.initial_physical_balance),
-        cashNet: summary.cashNet,
-        pendingReceivables: pendingDebt,
-        expenses: Number(expenses || 0),
-      })
-    : 0;
-  const variance = Number(finalCash || 0) - expected;
-  const depositMismatch = Number(deposit || 0) > Number(finalCash || 0);
+  const modalAwal = num(shiftQuery.data?.modal_awal);
+  const totalAsetAkhir =
+    Number(finalCash || 0) +
+    BANKS.reduce((s, b) => s + Number(banks[b] || 0), 0) +
+    PPOB_PROVIDERS.reduce((s, p) => s + Number(ppob[p] || 0), 0);
+  const modalAkhirValue = modalAkhir({
+    finalPhysical: Number(finalCash || 0),
+    bankFinals: BANKS.map((b) => Number(banks[b] || 0)),
+    ppobFinals: PPOB_PROVIDERS.map((p) => Number(ppob[p] || 0)),
+    modalAwal,
+  });
 
   const close = useMutation({
     mutationFn: async () => {
@@ -127,39 +92,28 @@ function CloseShift() {
       if (!shiftId) throw new Error("Tidak ada shift aktif");
       if (finalCash === "") throw new Error("Saldo fisik akhir wajib diisi");
       if (Number(finalCash) < 0) throw new Error("Saldo fisik akhir tidak boleh negatif");
-      if (depositMismatch) throw new Error("Setoran tidak boleh melebihi saldo fisik akhir");
       if (Number(deposit || 0) < 0) throw new Error("Setoran tidak boleh negatif");
 
-      const bankRows = BANKS.map((b) => ({
-        shift_id: shiftId,
+      const bankSnapshots = BANKS.map((b) => ({
         bank_name: b,
         final_amount: Number(banks[b] || 0),
       }));
-      const ppobRows = PPOB_PROVIDERS.map((p) => ({
-        shift_id: shiftId,
+      const ppobSnapshots = PPOB_PROVIDERS.map((p) => ({
         provider_name: p,
         final_amount: Number(ppob[p] || 0),
+        topup_amount: Number(ppobTopup[p] || 0),
       }));
 
-      const [bankRes, ppobRes] = await Promise.all([
-        supabase.from("bank_balances").upsert(bankRows, { onConflict: "shift_id,bank_name" }),
-        supabase.from("ppob_balances").upsert(ppobRows, { onConflict: "shift_id,provider_name" }),
-      ]);
-      if (bankRes.error) throw bankRes.error;
-      if (ppobRes.error) throw ppobRes.error;
-
-      const { error } = await supabase
-        .from("shifts")
-        .update({
-          final_physical_balance: Number(finalCash || 0),
-          total_expenses: Number(expenses || 0),
-          expense_notes: expenseNotes.trim() || null,
-          topup_request: Number(topup || 0),
-          deposit_amount: Number(deposit || 0),
-          end_time: new Date().toISOString(),
-          status: "closed",
-        })
-        .eq("id", shiftId);
+      const { error } = await supabase.rpc("close_shift_atomic", {
+        _shift_id: shiftId,
+        _final_cash: Number(finalCash || 0),
+        _expenses: Number(expenses || 0),
+        _expense_notes: expenseNotes.trim() || null,
+        _topup: Number(topup || 0),
+        _deposit: Number(deposit || 0),
+        _bank_snapshots: bankSnapshots,
+        _ppob_snapshots: ppobSnapshots,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -249,51 +203,34 @@ function CloseShift() {
       {/* Overview Cards */}
       <div className="responsive-grid-3">
         <div className="ledger-card p-5">
-          <p className="text-xs font-medium text-muted-foreground">Expected balance (sistem)</p>
+          <p className="text-xs font-medium text-muted-foreground">Modal awal</p>
           <p className="num mt-2 text-xl font-bold gradient-text-gold sm:text-2xl">
-            {rupiah(expected)}
+            {rupiah(modalAwal)}
           </p>
         </div>
         <div className="ledger-card p-5">
-          <p className="text-xs font-medium text-muted-foreground">Laba bersih shift</p>
+          <p className="text-xs font-medium text-muted-foreground">Total aset akhir</p>
+          <p className="num mt-2 text-xl font-bold gradient-text-cyan sm:text-2xl">
+            {rupiah(totalAsetAkhir)}
+          </p>
+        </div>
+        <div className="ledger-card p-5">
+          <p className="text-xs font-medium text-muted-foreground">Modal akhir (laba/rugi)</p>
           <p className="num mt-2 text-xl font-bold gradient-text-emerald sm:text-2xl">
-            {rupiah(summary.profit)}
-          </p>
-        </div>
-        <div className="ledger-card p-5">
-          <p className="text-xs font-medium text-muted-foreground">Piutang belum lunas</p>
-          <p className="num mt-2 text-xl font-bold text-warning sm:text-2xl">
-            {rupiah(pendingDebt)}
+            {rupiah(modalAkhirValue)}
           </p>
         </div>
       </div>
 
-      {/* Data Load Errors */}
-      {(txns.isError || pendingReceivables.isError) && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm backdrop-blur-sm">
-          <TriangleAlert className="size-5 shrink-0 text-destructive" />
-          <span className="text-muted-foreground">
-            Gagal memuat sebagian data shift. Angka di atas mungkin tidak akurat.
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="ml-auto"
-            onClick={() => {
-              txns.refetch();
-              pendingReceivables.refetch();
-            }}
-          >
-            Coba lagi
-          </Button>
-        </div>
-      )}
-
       {/* Main Inputs */}
       <section className="glass-card p-5 sm:p-6 space-y-4">
         <h2 className="text-base font-bold flex items-center gap-2">
-          <DollarSign className="size-4 text-primary" /> Kas Fisik & Pengeluaran Shift
+          <DollarSign className="size-4 text-primary" /> Kas Fisik, Pengeluaran & Setoran
         </h2>
+        <p className="text-xs text-muted-foreground">
+          Pengeluaran, top-up, dan setoran hanya dicatat dan ditampilkan apa adanya — tidak
+          memengaruhi perhitungan modal akhir.
+        </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MoneyInput
             id="final-cash"
@@ -331,39 +268,6 @@ function CloseShift() {
         </div>
       </section>
 
-      {/* Variance & Validation Badges */}
-      {finalCash !== "" &&
-        (Math.abs(variance) > 500 ? (
-          <div className="flex items-center gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3.5 text-sm backdrop-blur-sm">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-destructive/20">
-              <TriangleAlert className="size-5 text-destructive" />
-            </div>
-            <span>
-              Selisih (variance){" "}
-              <span className="font-bold text-destructive num">{rupiah(variance)}</span> antara
-              saldo sistem dan kas fisik. Periksa transaksi sebelum menutup shift.
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 rounded-2xl border border-success/40 bg-success/10 px-4 py-3.5 text-sm backdrop-blur-sm">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-success/20">
-              <CheckCircle2 className="size-5 text-success" />
-            </div>
-            <span className="font-medium text-success">
-              Saldo kas fisik cocok sempurna dengan sistem.
-            </span>
-          </div>
-        ))}
-
-      {depositMismatch && (
-        <div className="flex items-center gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3.5 text-sm backdrop-blur-sm">
-          <TriangleAlert className="size-5 shrink-0 text-destructive" />
-          <span className="text-destructive font-medium">
-            Setoran tidak boleh melebihi saldo fisik akhir.
-          </span>
-        </div>
-      )}
-
       {/* Bank Machine Snapshot */}
       <section className="glass-card p-5 sm:p-6">
         <h2 className="text-base font-bold flex items-center gap-2">
@@ -387,15 +291,28 @@ function CloseShift() {
         <h2 className="text-base font-bold flex items-center gap-2">
           <CreditCard className="size-4 text-accent" /> Detail saldo PPOB
         </h2>
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <p className="mt-1 text-xs text-muted-foreground">
+          Saldo akhir tiap provider, beserta penambahan saldo yang dilakukan selama shift.
+        </p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {PPOB_PROVIDERS.map((p) => (
-            <MoneyInput
-              key={p}
-              id={`ppob-${p}`}
-              label={p}
-              value={ppob[p] ?? ""}
-              onChange={(v) => setPpob((prev) => ({ ...prev, [p]: v }))}
-            />
+            <div key={p} className="rounded-xl border border-border/40 bg-secondary/20 p-3">
+              <h3 className="text-xs font-semibold text-muted-foreground">{p}</h3>
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <MoneyInput
+                  id={`ppob-${p}`}
+                  label="Saldo akhir"
+                  value={ppob[p] ?? ""}
+                  onChange={(v) => setPpob((prev) => ({ ...prev, [p]: v }))}
+                />
+                <MoneyInput
+                  id={`ppob-topup-${p}`}
+                  label="Penambahan saldo"
+                  value={ppobTopup[p] ?? ""}
+                  onChange={(v) => setPpobTopup((prev) => ({ ...prev, [p]: v }))}
+                />
+              </div>
+            </div>
           ))}
         </div>
       </section>
@@ -435,11 +352,6 @@ function CloseShift() {
               Pastikan semua saldo fisik dan snapshot mesin sudah diisi dengan benar. Shift yang
               ditutup tidak dapat diubah.
             </p>
-            {variance !== 0 && (
-              <p className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive num">
-                Selisih kas: {rupiah(variance)}
-              </p>
-            )}
             <div className="mt-7 flex gap-3">
               <Button
                 type="button"

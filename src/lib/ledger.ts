@@ -92,12 +92,38 @@ export function summarize(txns: LedgerTxn[]): ShiftSummary {
   );
 }
 
-/** Expected physical cash at closing time. */
-export function expectedCash(opts: {
-  initial: number;
-  cashNet: number;
-  pendingReceivables: number;
-  expenses: number;
+/**
+ * Modal awal (opening capital): physical cash + additional capital +
+ * opening balances of every bank & PPOB account.
+ */
+export function modalAwal(opts: {
+  initialPhysical: number;
+  additionalCapital: number;
+  bankInitials: number[];
+  ppobInitials: number[];
 }) {
-  return opts.initial + opts.cashNet - opts.pendingReceivables - opts.expenses;
+  return (
+    opts.initialPhysical +
+    opts.additionalCapital +
+    opts.bankInitials.reduce((s, n) => s + n, 0) +
+    opts.ppobInitials.reduce((s, n) => s + n, 0)
+  );
+}
+
+/**
+ * Modal akhir (closing result): final physical cash + final bank/PPOB balances
+ * minus modal awal. Represents the shift's net profit/loss.
+ */
+export function modalAkhir(opts: {
+  finalPhysical: number;
+  bankFinals: number[];
+  ppobFinals: number[];
+  modalAwal: number;
+}) {
+  return (
+    opts.finalPhysical +
+    opts.bankFinals.reduce((s, n) => s + n, 0) +
+    opts.ppobFinals.reduce((s, n) => s + n, 0) -
+    opts.modalAwal
+  );
 }
