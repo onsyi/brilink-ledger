@@ -203,19 +203,23 @@ function Reports() {
           ? "Bulan Ini"
           : "Semua Waktu";
 
-  // Data points for SVG chart (chronological order)
+  // Bar chart data, chronological. Scaled on magnitude so a loss is drawn as a
+  // tall red bar; the previous version divided by the max profit and clamped the
+  // result to a 15% floor, which rendered every loss as a small green bar and
+  // made a period of pure losses look like a flat run of small profits.
   const chartPoints = useMemo(() => {
     const sorted = [...rows]
       .filter((r) => r.laba !== null)
       .reverse()
       .slice(-12);
-    const maxVal = Math.max(...sorted.map((r) => r.laba ?? 0), 10000);
+    const maxAbs = Math.max(...sorted.map((r) => Math.abs(r.laba ?? 0)), 10000);
     return sorted.map((r) => {
-      const height = Math.max(15, Math.round(((r.laba ?? 0) / maxVal) * 100));
+      const profit = r.laba ?? 0;
       return {
         id: r.shift.id,
-        height,
-        profit: r.laba ?? 0,
+        height: Math.max(4, Math.round((Math.abs(profit) / maxAbs) * 100)),
+        negative: profit < 0,
+        profit,
         date: new Date(r.shift.start_time).toLocaleDateString("id-ID", {
           day: "numeric",
           month: "short",
@@ -223,6 +227,8 @@ function Reports() {
       };
     });
   }, [rows]);
+
+  const lossCount = chartPoints.filter((p) => p.negative).length;
 
   const periods: { id: Period; label: string }[] = [
     { id: "all", label: "Semua Waktu" },
@@ -341,6 +347,12 @@ function Reports() {
               <h2 className="text-base font-bold">Grafik Laba Fee Shift</h2>
               <p className="text-xs text-muted-foreground">
                 Tren performa {chartPoints.length} shift terakhir
+                {lossCount > 0 && (
+                  <>
+                    {" — "}
+                    <span className="font-semibold text-destructive">{lossCount} rugi</span>
+                  </>
+                )}
               </p>
             </div>
             <span className="num text-xs font-bold text-success bg-success/15 border border-success/25 px-2.5 py-1 rounded-lg">
@@ -355,13 +367,23 @@ function Reports() {
                 className="group relative flex flex-1 flex-col items-center gap-1.5 h-full justify-end"
               >
                 {/* Tooltip on hover */}
-                <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 rounded-lg bg-card border border-border px-2 py-1 text-[10px] num font-bold shadow-lg whitespace-nowrap">
+                <div
+                  className={cn(
+                    "absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 rounded-lg bg-card border border-border px-2 py-1 text-[10px] num font-bold shadow-lg whitespace-nowrap",
+                    pt.negative && "text-destructive",
+                  )}
+                >
                   {rupiah(pt.profit)}
                 </div>
                 {/* Bar */}
                 <div
                   style={{ height: `${pt.height}%` }}
-                  className="w-full max-w-[28px] rounded-t-lg bg-gradient-to-t from-[oklch(0.72_0.17_155_/_0.4)] to-[oklch(0.72_0.17_155)] group-hover:brightness-125 transition-all shadow-[0_0_10px_-2px] shadow-success/30"
+                  className={cn(
+                    "w-full max-w-[28px] rounded-t-lg bg-gradient-to-t group-hover:brightness-125 transition-all shadow-[0_0_10px_-2px]",
+                    pt.negative
+                      ? "from-destructive/40 to-destructive shadow-destructive/30"
+                      : "from-[oklch(0.72_0.17_155_/_0.4)] to-[oklch(0.72_0.17_155)] shadow-success/30",
+                  )}
                 />
                 <span className="text-[10px] text-muted-foreground num truncate w-full text-center">
                   {pt.date}
