@@ -45,7 +45,7 @@ type UserProfile = {
 };
 
 function SettingsPage() {
-  const { user, role } = useAuth();
+  const { user, role, loading: authLoading } = useAuth();
   const isOwner = role === "owner";
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -175,9 +175,16 @@ function SettingsPage() {
   }, [isOwner]);
 
   useEffect(() => {
+    // fetchProfile() bails out when `user` is still null, so without this the
+    // initial loading flag was never cleared and the page spun forever.
+    if (authLoading) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     fetchProfile();
     if (isOwner) fetchUsers();
-  }, [fetchProfile, isOwner, fetchUsers]);
+  }, [authLoading, user, fetchProfile, isOwner, fetchUsers]);
 
   const saveProfile = async () => {
     if (!user) return;
@@ -253,8 +260,10 @@ function SettingsPage() {
     }
     setResettingPassword(true);
 
+    // Must land on the page that can actually set a password; the site root
+    // just redirects to /dashboard and swallows the recovery token.
     const { error } = await supabase.auth.resetPasswordForEmail(resetUserEmail, {
-      redirectTo: window.location.origin,
+      redirectTo: `${window.location.origin}/reset-password`,
     });
 
     if (error) {
@@ -674,8 +683,9 @@ function SettingsPage() {
             <DialogTitle>Kirim Email Reset Password</DialogTitle>
             <DialogDescription>
               Email reset password akan dikirim ke{" "}
-              <span className="font-medium">{resetUserEmail}</span>. Kasir akan diarahkan ke halaman
-              login untuk mengatur password baru.
+              <span className="font-medium">{resetUserName}</span> (
+              <span className="font-medium">{resetUserEmail}</span>). Tautan di email membuka
+              halaman untuk mengatur password baru.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
