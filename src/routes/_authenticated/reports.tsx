@@ -172,7 +172,6 @@ function Reports() {
         ppobUsed: ppobTerpakai({
           ppobInitials: ppobInitialsByShift.get(s.id) ?? [],
           ppobFinals: ppobFinalsByShift.get(s.id) ?? [],
-          topup: num(s.topup_request),
         }),
         laba:
           s.modal_akhir === null
@@ -184,6 +183,7 @@ function Reports() {
                 bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
                 expenses: num(s.total_expenses),
                 settlement: num(s.settlement_amount),
+                additionalCapital: num(s.additional_capital),
               }),
         cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
         branchName: (s.branch_id && branchNameOf.get(s.branch_id)) || "—",
