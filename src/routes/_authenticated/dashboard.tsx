@@ -197,7 +197,7 @@ function OpenShiftPanel({
           <div className="grid gap-4 sm:grid-cols-2">
             <MoneyInput
               id="initial"
-              label="Modal awal uang fisik (kas di laci)"
+              label="Saldo Tunai Awal Buka Kasir"
               value={initial}
               onChange={setInitial}
               required

@@ -27,7 +27,7 @@ export const Route = createFileRoute("/_authenticated/close-shift")({
       {
         name: "description",
         content:
-          "Penutupan shift: saldo fisik akhir, pengeluaran, permintaan top-up, saldo bank dan PPOB, serta setoran kasir.",
+          "Penutupan shift: saldo tunai akhir, pengeluaran, saldo bank dan PPOB, serta setoran kasir.",
       },
       { property: "og:title", content: "Tutup Shift — Kasir BRILink" },
       {
@@ -70,8 +70,9 @@ function CloseShift() {
       if (submittingRef.current) throw new Error(IN_FLIGHT);
       submittingRef.current = true;
       if (!shiftId) throw new Error("Tidak ada shift aktif");
-      if (finalCash === "") throw new Error("Saldo fisik akhir wajib diisi");
-      if (Number(finalCash) < 0) throw new Error("Saldo fisik akhir tidak boleh negatif");
+      if (finalCash === "") throw new Error("Saldo Tunai Akhir Tutup Kasir wajib diisi");
+      if (Number(finalCash) < 0)
+        throw new Error("Saldo Tunai Akhir Tutup Kasir tidak boleh negatif");
       if (Number(deposit || 0) < 0) throw new Error("Setoran tidak boleh negatif");
       if (Number(settlement || 0) < 0) throw new Error("Settlement tidak boleh negatif");
       if (Number(additionalCapital || 0) < 0) throw new Error("Modal tambahan tidak boleh negatif");
@@ -201,7 +202,7 @@ function CloseShift() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MoneyInput
             id="final-cash"
-            label="Saldo Fisik Akhir"
+            label="Saldo Tunai Akhir Tutup Kasir"
             value={finalCash}
             onChange={setFinalCash}
             required
@@ -323,8 +324,8 @@ function CloseShift() {
               Konfirmasi Tutup Shift
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Pastikan semua saldo fisik dan snapshot mesin sudah diisi dengan benar. Shift yang
-              ditutup tidak dapat diubah.
+              Pastikan saldo tunai dan snapshot mesin sudah diisi dengan benar. Shift yang ditutup
+              tidak dapat diubah.
             </p>
             <div className="mt-7 flex gap-3">
               <Button
