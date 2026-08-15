@@ -128,20 +128,26 @@ export function modalAkhir(opts: {
  * Laba Fee (fee profit) — the BRILink side only: physical cash and bank
  * accounts.
  *
- *   (Saldo Akhir + total saldo rekening AKHIR + Pengeluaran + settlement)
+ *   (Saldo Akhir + total saldo rekening AKHIR + settlement)
  *   - (Saldo Awal + total saldo rekening AWAL)
  *
- * PPOB is deliberately absent. Its balances and its top-up are settled on
- * their own ledger via {@link ppobTerpakai}; folding the top-up in here
- * double-counted it, because buying PPOB balance out of a bank account
- * already shows up as a drop in the closing bank total.
+ * Two things are deliberately absent.
+ *
+ * PPOB: its balances and its top-up are settled on their own ledger via
+ * {@link ppobTerpakai}. Folding the top-up in here double-counted it,
+ * because buying PPOB balance out of a bank account already shows up as a
+ * drop in the closing bank total.
+ *
+ * Pengeluaran and setoran owner: recorded and reported, never calculated.
+ * Cash spent on operating costs leaves the drawer, so it lowers Laba Fee
+ * through the closing cash figure on its own; adding it back would cancel
+ * that out. Both remain visible as their own columns in Laporan.
  */
 export function labaFee(opts: {
   initialPhysical: number;
   finalPhysical: number;
   bankInitials: number[];
   bankFinals: number[];
-  expenses: number;
   settlement: number;
 }) {
   const bankInitialTotal = opts.bankInitials.reduce((s, n) => s + n, 0);
@@ -149,7 +155,6 @@ export function labaFee(opts: {
   return (
     opts.finalPhysical +
     bankFinalTotal +
-    opts.expenses +
     opts.settlement -
     (opts.initialPhysical + bankInitialTotal)
   );
