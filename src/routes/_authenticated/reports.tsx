@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   Loader2,
   ShieldCheck,
@@ -13,12 +14,25 @@ import {
   Clock,
   TriangleAlert,
   PencilLine,
+  ScanLine,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { labaFee, num, ppobTerpakai, rupiah } from "@/lib/ledger";
+import { BANKS, labaFee, num, PPOB_PROVIDERS, ppobTerpakai, rupiah } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
 import { QueryError } from "@/components/QueryError";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/MoneyInput";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({
@@ -72,6 +86,11 @@ function Reports() {
   const isOwner = role === "owner";
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<Period>("all");
+  const [auditShift, setAuditShift] = useState<{
+    id: string;
+    cashier: string;
+    startedAt: string;
+  } | null>(null);
 
   const branches = useQuery({
     queryKey: ["branches"],
@@ -212,17 +231,33 @@ function Reports() {
         .select("id, username")
         .in("id", [...new Set(entries.map((a) => a.user_id))]);
       const nameOf = new Map((profiles ?? []).map((p) => [p.id, p.username]));
-      const modalOf = (d: unknown) =>
-        num((d as { modal_awal?: number | string } | null)?.modal_awal);
-      return entries.map((a) => ({
-        id: a.id,
-        shiftId: a.shift_id,
-        action: a.action,
-        at: a.created_at,
-        cashier: nameOf.get(a.user_id) ?? "—",
-        before: modalOf(a.before_data),
-        after: a.after_data ? modalOf(a.after_data) : null,
-      }));
+      type Payload = {
+        modal_awal?: number | string | null;
+        kind?: string;
+        name?: string;
+        field?: string;
+        value?: number | string;
+        reason?: string;
+      } | null;
+      return entries.map((a) => {
+        const before = a.before_data as Payload;
+        const after = a.after_data as Payload;
+        return {
+          id: a.id,
+          shiftId: a.shift_id,
+          action: a.action,
+          at: a.created_at,
+          actor: nameOf.get(a.user_id) ?? "—",
+          before: num(before?.modal_awal),
+          after: after ? num(after.modal_awal) : null,
+          detail:
+            a.action === "audit" && before?.name
+              ? `${before.name} · saldo ${before.field === "initial" ? "awal" : "akhir"} · ` +
+                `${rupiah(before.value)} → ${rupiah(after?.value)}`
+              : null,
+          reason: after?.reason ?? before?.reason ?? null,
+        };
+      });
     },
   });
 
@@ -480,6 +515,7 @@ function Reports() {
                   <th className="pb-3 text-right">Modal Akhir</th>
                   <th className="pb-3 text-right">Laba Fee</th>
                   <th className="pb-3 text-center">Status</th>
+                  {isOwner && <th className="pb-3 text-center">Audit</th>}
                 </tr>
               </thead>
               <tbody className="num">
@@ -554,6 +590,23 @@ function Reports() {
                         {r.shift.status === "open" ? "Aktif" : "Ditutup"}
                       </span>
                     </td>
+                    {isOwner && (
+                      <td className="py-3.5 text-center">
+                        <button
+                          onClick={() =>
+                            setAuditShift({
+                              id: r.shift.id,
+                              cashier: r.cashier,
+                              startedAt: r.shift.start_time,
+                            })
+                          }
+                          title="Koreksi saldo bank / PPOB shift ini"
+                          className="inline-flex items-center gap-1 rounded-lg border border-border/60 px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                        >
+                          <ScanLine className="size-3" /> Audit
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -588,16 +641,16 @@ function Reports() {
               <thead>
                 <tr className="border-b border-border/60 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
                   <th className="pb-3">Waktu</th>
-                  <th className="pb-3">Kasir</th>
+                  <th className="pb-3">Oleh</th>
                   <th className="pb-3">Tindakan</th>
-                  <th className="pb-3 text-right">Modal Awal Sebelum</th>
-                  <th className="pb-3 text-right">Modal Awal Sesudah</th>
+                  <th className="pb-3">Keterangan</th>
+                  <th className="pb-3 text-right">Modal Awal</th>
                 </tr>
               </thead>
               <tbody className="num">
                 {(amendments.data ?? []).map((a) => (
                   <tr key={a.id} className="border-b border-border/30 hover:bg-secondary/30">
-                    <td className="py-3 text-xs">
+                    <td className="py-3 align-top text-xs">
                       {new Date(a.at).toLocaleString("id-ID", {
                         day: "numeric",
                         month: "short",
@@ -605,20 +658,43 @@ function Reports() {
                         minute: "2-digit",
                       })}
                     </td>
-                    <td className="py-3 font-medium">{a.cashier}</td>
-                    <td className="py-3">
+                    <td className="py-3 align-top font-medium">{a.actor}</td>
+                    <td className="py-3 align-top">
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
                           a.action === "cancel"
                             ? "border border-destructive/25 bg-destructive/15 text-destructive"
-                            : "border border-warning/30 bg-warning/15 text-warning"
+                            : a.action === "audit"
+                              ? "border border-primary/30 bg-primary/15 text-primary"
+                              : "border border-warning/30 bg-warning/15 text-warning"
                         }`}
                       >
-                        {a.action === "cancel" ? "Dibatalkan" : "Diperbaiki"}
+                        {a.action === "cancel"
+                          ? "Dibatalkan"
+                          : a.action === "audit"
+                            ? "Audit owner"
+                            : "Diperbaiki"}
                       </span>
                     </td>
-                    <td className="py-3 text-right">{rupiah(a.before)}</td>
-                    <td className="py-3 text-right">{a.after !== null ? rupiah(a.after) : "—"}</td>
+                    <td className="py-3 align-top text-xs">
+                      {a.detail && <div className="font-medium">{a.detail}</div>}
+                      {a.reason && (
+                        <div className="mt-0.5 max-w-[280px] italic text-muted-foreground">
+                          {a.reason}
+                        </div>
+                      )}
+                      {!a.detail && !a.reason && <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="py-3 align-top text-right">
+                      {a.after !== null && a.after !== a.before ? (
+                        <span>
+                          <span className="text-muted-foreground">{rupiah(a.before)}</span> →{" "}
+                          {rupiah(a.after)}
+                        </span>
+                      ) : (
+                        rupiah(a.before)
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -626,7 +702,204 @@ function Reports() {
           </div>
         )}
       </section>
+
+      {auditShift && <BalanceAuditDialog shift={auditShift} onClose={() => setAuditShift(null)} />}
     </div>
+  );
+}
+
+/**
+ * Owner-only correction of one bank/PPOB balance on a shift, open or closed.
+ *
+ * Goes through owner_adjust_balance(), which requires a reason, recomputes the
+ * stored modal_awal / modal_akhir so the report cannot end up disagreeing with
+ * its own per-account rows, and writes the change to the amendment trail.
+ */
+function BalanceAuditDialog({
+  shift,
+  onClose,
+}: {
+  shift: { id: string; cashier: string; startedAt: string };
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [kind, setKind] = useState<"bank" | "ppob">("bank");
+  const [name, setName] = useState<string>(BANKS[0]);
+  const [field, setField] = useState<"initial" | "final">("final");
+  const [value, setValue] = useState("");
+  const [reason, setReason] = useState("");
+
+  const balances = useQuery({
+    queryKey: ["audit-balances", shift.id],
+    queryFn: async () => {
+      const [bankRes, ppobRes] = await Promise.all([
+        supabase
+          .from("bank_balances")
+          .select("bank_name, initial_amount, final_amount")
+          .eq("shift_id", shift.id),
+        supabase
+          .from("ppob_balances")
+          .select("provider_name, initial_amount, final_amount")
+          .eq("shift_id", shift.id),
+      ]);
+      if (bankRes.error) throw bankRes.error;
+      if (ppobRes.error) throw ppobRes.error;
+      const map = new Map<string, { initial: number; final: number }>();
+      (bankRes.data ?? []).forEach((b) =>
+        map.set(`bank:${b.bank_name}`, {
+          initial: num(b.initial_amount),
+          final: num(b.final_amount),
+        }),
+      );
+      (ppobRes.data ?? []).forEach((p) =>
+        map.set(`ppob:${p.provider_name}`, {
+          initial: num(p.initial_amount),
+          final: num(p.final_amount),
+        }),
+      );
+      return map;
+    },
+  });
+
+  const options = kind === "bank" ? BANKS : PPOB_PROVIDERS;
+  const current = balances.data?.get(`${kind}:${name}`);
+  const currentValue = field === "initial" ? (current?.initial ?? 0) : (current?.final ?? 0);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (value === "") throw new Error("Nilai baru wajib diisi");
+      if (reason.trim().length < 5)
+        throw new Error("Alasan audit wajib diisi (minimal 5 karakter)");
+      const { error } = await supabase.rpc("owner_adjust_balance", {
+        _shift_id: shift.id,
+        _kind: kind,
+        _name: name,
+        _field: field,
+        _new_value: Number(value),
+        _reason: reason.trim(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Saldo dikoreksi dan tercatat di riwayat audit");
+      queryClient.invalidateQueries({ queryKey: ["shift-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["shift-amendments"] });
+      queryClient.invalidateQueries({ queryKey: ["owner-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-balances", shift.id] });
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const selectClass =
+    "h-10 w-full rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="glass-card">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 font-display text-xl font-bold">
+            <ScanLine className="size-5 text-primary" /> Audit Saldo Rekening
+          </DialogTitle>
+          <DialogDescription>
+            Shift <span className="font-medium">{shift.cashier}</span> ·{" "}
+            {new Date(shift.startedAt).toLocaleString("id-ID")}. Koreksi tercatat permanen beserta
+            alasannya, dan modal awal/akhir dihitung ulang otomatis.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="audit-kind" className="text-xs text-muted-foreground">
+                Jenis
+              </Label>
+              <select
+                id="audit-kind"
+                value={kind}
+                className={selectClass}
+                onChange={(e) => {
+                  const k = e.target.value as "bank" | "ppob";
+                  setKind(k);
+                  setName(k === "bank" ? BANKS[0] : PPOB_PROVIDERS[0]);
+                }}
+              >
+                <option value="bank">Bank</option>
+                <option value="ppob">PPOB</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="audit-name" className="text-xs text-muted-foreground">
+                Akun
+              </Label>
+              <select
+                id="audit-name"
+                value={name}
+                className={selectClass}
+                onChange={(e) => setName(e.target.value)}
+              >
+                {options.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="audit-field" className="text-xs text-muted-foreground">
+                Kolom
+              </Label>
+              <select
+                id="audit-field"
+                value={field}
+                className={selectClass}
+                onChange={(e) => setField(e.target.value as "initial" | "final")}
+              >
+                <option value="initial">Saldo Awal</option>
+                <option value="final">Saldo Akhir</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-border/60 bg-secondary/30 px-3 py-2.5">
+            <span className="text-sm text-muted-foreground">Nilai tercatat sekarang</span>
+            <span className="num text-sm font-semibold">
+              {balances.isLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                rupiah(currentValue)
+              )}
+            </span>
+          </div>
+
+          <MoneyInput id="audit-value" label="Nilai baru" value={value} onChange={setValue} />
+
+          <div className="space-y-1.5">
+            <Label htmlFor="audit-reason" className="text-xs text-muted-foreground">
+              Alasan koreksi (wajib)
+            </Label>
+            <Input
+              id="audit-reason"
+              value={reason}
+              maxLength={200}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Contoh: Rekonsiliasi mutasi rekening BRI D tanggal 16 Agt"
+              className="h-10"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>
+            Batal
+          </Button>
+          <Button onClick={() => save.mutate()} disabled={save.isPending || balances.isLoading}>
+            {save.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+            Simpan koreksi
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
