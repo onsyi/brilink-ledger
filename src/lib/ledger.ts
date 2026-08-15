@@ -125,10 +125,16 @@ export function modalAkhir(opts: {
 }
 
 /**
- * Laba Fee (fee profit):
+ * Laba Fee (fee profit) — the BRILink side only: physical cash and bank
+ * accounts.
+ *
  *   (Saldo Akhir + total saldo rekening AKHIR + Pengeluaran + settlement)
- *   - (Saldo Awal + total saldo rekening AWAL + Penambahan Saldo)
- * where "Penambahan Saldo" is the top-up request amount.
+ *   - (Saldo Awal + total saldo rekening AWAL)
+ *
+ * PPOB is deliberately absent. Its balances and its top-up are settled on
+ * their own ledger via {@link ppobTerpakai}; folding the top-up in here
+ * double-counted it, because buying PPOB balance out of a bank account
+ * already shows up as a drop in the closing bank total.
  */
 export function labaFee(opts: {
   initialPhysical: number;
@@ -137,7 +143,6 @@ export function labaFee(opts: {
   bankFinals: number[];
   expenses: number;
   settlement: number;
-  topup: number;
 }) {
   const bankInitialTotal = opts.bankInitials.reduce((s, n) => s + n, 0);
   const bankFinalTotal = opts.bankFinals.reduce((s, n) => s + n, 0);
@@ -146,6 +151,22 @@ export function labaFee(opts: {
     bankFinalTotal +
     opts.expenses +
     opts.settlement -
-    (opts.initialPhysical + bankInitialTotal + opts.topup)
+    (opts.initialPhysical + bankInitialTotal)
   );
+}
+
+/**
+ * Saldo PPOB yang terpakai selama shift — kept entirely separate from
+ * Laba Fee, since PPOB top-ups have nothing to do with the BRILink books.
+ *
+ *   total saldo awal PPOB + penambahan saldo - total saldo akhir PPOB
+ */
+export function ppobTerpakai(opts: {
+  ppobInitials: number[];
+  ppobFinals: number[];
+  topup: number;
+}) {
+  const initialTotal = opts.ppobInitials.reduce((s, n) => s + n, 0);
+  const finalTotal = opts.ppobFinals.reduce((s, n) => s + n, 0);
+  return initialTotal + opts.topup - finalTotal;
 }
