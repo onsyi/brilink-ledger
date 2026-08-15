@@ -126,7 +126,7 @@ function Reports() {
         supabase.from("branches").select("id, name"),
         supabase
           .from("ppob_balances")
-          .select("shift_id, initial_amount, topup_amount, final_amount")
+          .select("shift_id, initial_amount, final_amount")
           .in("shift_id", ids),
         supabase
           .from("bank_balances")
@@ -139,10 +139,15 @@ function Reports() {
       (txns ?? []).forEach((t) => {
         txnCountByShift.set(t.shift_id, (txnCountByShift.get(t.shift_id) ?? 0) + 1);
       });
-      const ppobUsedByShift = new Map<string, number>();
+      // PPOB terpakai = saldo awal + penambahan saldo - saldo akhir. Penambahan
+      // saldo kini satu angka di level shift (topup_request); kolom per-provider
+      // ppob_balances.topup_amount tidak lagi diisi form penutupan.
+      const ppobNetByShift = new Map<string, number>();
       (ppobRows ?? []).forEach((p) => {
-        const used = num(p.initial_amount) + num(p.topup_amount) - num(p.final_amount);
-        ppobUsedByShift.set(p.shift_id, (ppobUsedByShift.get(p.shift_id) ?? 0) + used);
+        ppobNetByShift.set(
+          p.shift_id,
+          (ppobNetByShift.get(p.shift_id) ?? 0) + num(p.initial_amount) - num(p.final_amount),
+        );
       });
       const bankInitialsByShift = new Map<string, number>();
       const bankFinalsByShift = new Map<string, number>();
@@ -159,7 +164,7 @@ function Reports() {
       const rows = (shiftRows ?? []).map((s) => ({
         shift: s,
         txnCount: txnCountByShift.get(s.id) ?? 0,
-        ppobUsed: ppobUsedByShift.get(s.id) ?? 0,
+        ppobUsed: (ppobNetByShift.get(s.id) ?? 0) + num(s.topup_request),
         laba:
           s.modal_akhir === null
             ? null
