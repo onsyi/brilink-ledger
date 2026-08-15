@@ -65,10 +65,6 @@ function CloseShift() {
   const [showConfirm, setShowConfirm] = useState(false);
   const submittingRef = useRef(false);
 
-  const finalCashValue = num(finalCash);
-  const depositValue = num(deposit);
-  const depositExceedsCash = finalCash !== "" && depositValue > finalCashValue;
-
   const close = useMutation({
     mutationFn: async () => {
       if (submittingRef.current) throw new Error(IN_FLIGHT);
@@ -79,12 +75,9 @@ function CloseShift() {
       if (Number(deposit || 0) < 0) throw new Error("Setoran tidak boleh negatif");
       if (Number(settlement || 0) < 0) throw new Error("Settlement tidak boleh negatif");
       if (Number(additionalCapital || 0) < 0) throw new Error("Modal tambahan tidak boleh negatif");
-      // Saldo fisik akhir dihitung sebelum uang diserahkan ke owner, jadi setoran
-      // tidak mungkin melebihi isi laci.
-      if (depositExceedsCash)
-        throw new Error(
-          `Setoran (${rupiah(depositValue)}) melebihi saldo fisik akhir (${rupiah(finalCashValue)})`,
-        );
+      // Setoran sengaja tidak dibandingkan dengan saldo fisik akhir: kasir
+      // menyerahkan uang ke owner lebih dulu, lalu menghitung sisa di laci, jadi
+      // setoran memang normal lebih besar dari saldo akhir.
 
       const bankSnapshots = BANKS.map((b) => ({
         bank_name: b,
@@ -233,12 +226,6 @@ function CloseShift() {
             onChange={setSettlement}
           />
         </div>
-        {depositExceedsCash && (
-          <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
-            Setoran {rupiah(depositValue)} melebihi saldo fisik akhir {rupiah(finalCashValue)}.
-            Hitung saldo fisik akhir sebelum uang diserahkan ke owner.
-          </p>
-        )}
         <div className="space-y-1.5 pt-2">
           <Label htmlFor="expense-notes" className="text-xs font-medium text-muted-foreground">
             Rincian pengeluaran (listrik, parkir, bensin, …)
@@ -305,12 +292,7 @@ function CloseShift() {
       </section>
 
       {/* Submit Button */}
-      <Button
-        type="submit"
-        size="lg"
-        disabled={close.isPending || depositExceedsCash}
-        className="w-full sm:w-auto"
-      >
+      <Button type="submit" size="lg" disabled={close.isPending} className="w-full sm:w-auto">
         {close.isPending ? (
           <Loader2 className="mr-2 size-4 animate-spin" />
         ) : (
