@@ -2,7 +2,18 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, User, Shield, Users, ArrowLeft, Copy, Check, KeyRound } from "lucide-react";
+import {
+  Loader2,
+  User,
+  Shield,
+  Users,
+  ArrowLeft,
+  Copy,
+  Check,
+  KeyRound,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, type AppRole } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -73,6 +84,13 @@ function SettingsPage() {
   const [resettingPassword, setResettingPassword] = useState(false);
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newOwnPassword, setNewOwnPassword] = useState("");
+  const [confirmOwnPassword, setConfirmOwnPassword] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const [editBranchUser, setEditBranchUser] = useState<UserProfile | null>(null);
   const [editBranchId, setEditBranchId] = useState<string>("");
@@ -204,6 +222,61 @@ function SettingsPage() {
       toast.success("Profil tersimpan");
       fetchProfile();
     }
+  };
+
+  const closePasswordDialog = () => {
+    setShowChangePassword(false);
+    setCurrentPassword("");
+    setNewOwnPassword("");
+    setConfirmOwnPassword("");
+    setShowPasswords(false);
+  };
+
+  const changeOwnPassword = async () => {
+    const email = profile?.email ?? user?.email ?? "";
+    if (!email) {
+      toast.error("Email akun tidak diketahui");
+      return;
+    }
+    if (!currentPassword) {
+      toast.error("Password saat ini wajib diisi");
+      return;
+    }
+    if (newOwnPassword.length < 6) {
+      toast.error("Password baru minimal 6 karakter");
+      return;
+    }
+    if (newOwnPassword !== confirmOwnPassword) {
+      toast.error("Konfirmasi password tidak cocok");
+      return;
+    }
+    if (newOwnPassword === currentPassword) {
+      toast.error("Password baru harus berbeda dari password lama");
+      return;
+    }
+
+    setChangingPassword(true);
+    // Supabase lets any live session set a new password without proving the old
+    // one, so an unattended terminal would be enough to take over the account.
+    // Re-authenticating first makes the current password a real requirement.
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+    if (verifyError) {
+      setChangingPassword(false);
+      toast.error("Password saat ini salah");
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newOwnPassword });
+    setChangingPassword(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Password berhasil diubah");
+    closePasswordDialog();
   };
 
   const addCashier = async () => {
@@ -446,7 +519,11 @@ function SettingsPage() {
               />
             </div>
           </div>
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowChangePassword(true)}>
+              <KeyRound className="mr-1.5 size-4" />
+              Ubah Password
+            </Button>
             <Button onClick={saveProfile} disabled={saving}>
               {saving && <Loader2 className="mr-2 size-4 animate-spin" />}
               Simpan
@@ -599,6 +676,86 @@ function SettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Change Own Password Dialog */}
+      <Dialog
+        open={showChangePassword}
+        onOpenChange={(open) => {
+          if (!open) closePasswordDialog();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="size-5 text-primary" />
+              Ubah Password
+            </DialogTitle>
+            <DialogDescription>
+              Password akun <span className="font-medium">{profile?.email}</span>. Masukkan password
+              saat ini untuk memastikan bukan orang lain yang mengubahnya.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Password saat ini</Label>
+              <div className="relative">
+                <Input
+                  id="current-password"
+                  type={showPasswords ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  maxLength={72}
+                  autoComplete="current-password"
+                  className="h-11 pr-11"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPasswords((v) => !v)}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+                >
+                  {showPasswords ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-own-password">Password baru</Label>
+              <Input
+                id="new-own-password"
+                type={showPasswords ? "text" : "password"}
+                value={newOwnPassword}
+                onChange={(e) => setNewOwnPassword(e.target.value)}
+                placeholder="Minimal 6 karakter"
+                maxLength={72}
+                autoComplete="new-password"
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-own-password">Ulangi password baru</Label>
+              <Input
+                id="confirm-own-password"
+                type={showPasswords ? "text" : "password"}
+                value={confirmOwnPassword}
+                onChange={(e) => setConfirmOwnPassword(e.target.value)}
+                placeholder="Ulangi password baru"
+                maxLength={72}
+                autoComplete="new-password"
+                className="h-11"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={closePasswordDialog}>
+              Batal
+            </Button>
+            <Button onClick={changeOwnPassword} disabled={changingPassword}>
+              {changingPassword && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Simpan Password
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Cashier Dialog */}
       <Dialog open={showAddCashier} onOpenChange={setShowAddCashier}>
