@@ -437,6 +437,17 @@ export type Database = {
       };
       shift_is_readable: { Args: { _shift_id: string }; Returns: boolean };
       shift_is_writable: { Args: { _shift_id: string }; Returns: boolean };
+      owner_adjust_balance: {
+        Args: {
+          _shift_id: string;
+          _kind: string;
+          _name: string;
+          _field: string;
+          _new_value: number;
+          _reason: string;
+        };
+        Returns: undefined;
+      };
       amend_open_shift: {
         Args: {
           _shift_id: string;
