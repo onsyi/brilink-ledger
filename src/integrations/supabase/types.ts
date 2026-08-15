@@ -407,6 +407,21 @@ export type Database = {
       };
       shift_is_readable: { Args: { _shift_id: string }; Returns: boolean };
       shift_is_writable: { Args: { _shift_id: string }; Returns: boolean };
+      amend_open_shift: {
+        Args: {
+          _shift_id: string;
+          _initial_cash: number;
+          _bank_snapshots: Json;
+          _ppob_snapshots: Json;
+        };
+        Returns: undefined;
+      };
+      cancel_open_shift: {
+        Args: {
+          _shift_id: string;
+        };
+        Returns: undefined;
+      };
       open_shift_atomic: {
         Args: {
           _user_id: string;
