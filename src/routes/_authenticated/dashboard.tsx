@@ -10,6 +10,8 @@ import {
   CreditCard,
   TriangleAlert,
   Building2,
+  Pencil,
+  XCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -350,19 +352,87 @@ function BalanceList({
 }
 
 function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: OpenShiftRow }) {
-  const txns = useQuery({
-    queryKey: ["txns", shiftId],
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
+  const [initial, setInitial] = useState("");
+  const [banks, setBanks] = useState<Record<string, string>>({});
+  const [ppob, setPpob] = useState<Record<string, string>>({});
+
+  const opening = useQuery({
+    queryKey: ["shift-opening", shiftId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select(
-          "id, transaction_type, source_account, destination_account, principal_amount, customer_fee, provider_cost, profit_net, created_at",
-        )
-        .eq("shift_id", shiftId)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+      const [bankRes, ppobRes] = await Promise.all([
+        supabase.from("bank_balances").select("bank_name, initial_amount").eq("shift_id", shiftId),
+        supabase
+          .from("ppob_balances")
+          .select("provider_name, initial_amount")
+          .eq("shift_id", shiftId),
+      ]);
+      if (bankRes.error) throw bankRes.error;
+      if (ppobRes.error) throw ppobRes.error;
+      const bankMap: Record<string, number> = {};
+      (bankRes.data ?? []).forEach((b) => (bankMap[b.bank_name] = num(b.initial_amount)));
+      const ppobMap: Record<string, number> = {};
+      (ppobRes.data ?? []).forEach((p) => (ppobMap[p.provider_name] = num(p.initial_amount)));
+      return { bankMap, ppobMap };
     },
+  });
+
+  const startEditing = () => {
+    const b: Record<string, string> = {};
+    for (const name of BANKS) b[name] = String(opening.data?.bankMap[name] || "");
+    const p: Record<string, string> = {};
+    for (const name of PPOB_PROVIDERS) p[name] = String(opening.data?.ppobMap[name] || "");
+    setInitial(String(num(shift.initial_physical_balance) || ""));
+    setBanks(b);
+    setPpob(p);
+    setEditing(true);
+  };
+
+  const amend = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc("amend_open_shift", {
+        _shift_id: shiftId,
+        _initial_cash: Number(initial || 0),
+        _bank_snapshots: BANKS.map((b) => ({
+          bank_name: b,
+          initial_amount: Number(banks[b] || 0),
+        })),
+        _ppob_snapshots: PPOB_PROVIDERS.map((p) => ({
+          provider_name: p,
+          initial_amount: Number(ppob[p] || 0),
+        })),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Modal awal diperbarui");
+      setEditing(false);
+      queryClient.invalidateQueries({ queryKey: ["open-shift"] });
+      queryClient.invalidateQueries({ queryKey: ["shift-opening", shiftId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const cancelShift = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc("cancel_open_shift", { _shift_id: shiftId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Shift dibatalkan — silakan buka ulang");
+      setShowCancel(false);
+      queryClient.invalidateQueries({ queryKey: ["open-shift"] });
+      queryClient.invalidateQueries({ queryKey: ["last-closed-shift"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const editTotal = modalAwal({
+    initialPhysical: num(initial),
+    bankInitials: BANKS.map((b) => num(banks[b])),
+    ppobInitials: PPOB_PROVIDERS.map((p) => num(ppob[p])),
   });
 
   return (
@@ -381,25 +451,206 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: OpenShif
             Dibuka {new Date(shift.start_time).toLocaleString("id-ID")}
           </p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link to="/close-shift">
-            Tutup shift <ArrowRight className="ml-1 size-4" />
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {!editing && (
+            <Button variant="outline" size="sm" onClick={startEditing} disabled={opening.isLoading}>
+              <Pencil className="mr-1.5 size-4" /> Perbaiki modal awal
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowCancel(true)}
+            className="border-destructive/40 text-destructive hover:bg-destructive/10"
+          >
+            <XCircle className="mr-1.5 size-4" /> Batalkan shift
+          </Button>
+          <Button asChild size="sm">
+            <Link to="/close-shift">
+              Tutup shift <ArrowRight className="ml-1 size-4" />
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      {/* Data Load Errors */}
-      {txns.isError && (
+      {opening.isError && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm backdrop-blur-sm">
           <TriangleAlert className="size-5 shrink-0 text-destructive" />
-          <span className="text-muted-foreground">
-            Gagal memuat sebagian data shift. Angka di bawah mungkin tidak akurat.
-          </span>
-          <Button size="sm" variant="outline" className="ml-auto" onClick={() => txns.refetch()}>
+          <span className="text-muted-foreground">Gagal memuat modal awal shift ini.</span>
+          <Button size="sm" variant="outline" className="ml-auto" onClick={() => opening.refetch()}>
             Coba lagi
           </Button>
         </div>
       )}
+
+      {editing ? (
+        <form
+          className="glass-card space-y-5 p-6 sm:p-8"
+          onSubmit={(e) => {
+            e.preventDefault();
+            amend.mutate();
+          }}
+        >
+          <div>
+            <h2 className="text-lg font-bold">Perbaiki modal awal</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Koreksi angka yang salah diinput saat membuka shift. Perubahan tercatat dan bisa
+              dilihat owner.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <MoneyInput
+              id="edit-initial"
+              label="Saldo Tunai Awal Buka Kasir"
+              value={initial}
+              onChange={setInitial}
+              required
+            />
+          </div>
+
+          <section className="rounded-xl border border-border/40 bg-secondary/20 p-4">
+            <div className="flex items-center gap-2">
+              <Building2 className="size-4 text-digital" />
+              <h3 className="text-sm font-bold">Saldo awal rekening (Bank)</h3>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {BANKS.map((b) => (
+                <MoneyInput
+                  key={b}
+                  id={`edit-bank-${b}`}
+                  label={b}
+                  value={banks[b] ?? ""}
+                  onChange={(v) => setBanks((prev) => ({ ...prev, [b]: v }))}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-border/40 bg-secondary/20 p-4">
+            <div className="flex items-center gap-2">
+              <CreditCard className="size-4 text-accent" />
+              <h3 className="text-sm font-bold">Saldo awal PPOB</h3>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {PPOB_PROVIDERS.map((p) => (
+                <MoneyInput
+                  key={p}
+                  id={`edit-ppob-${p}`}
+                  label={p}
+                  value={ppob[p] ?? ""}
+                  onChange={(v) => setPpob((prev) => ({ ...prev, [p]: v }))}
+                />
+              ))}
+            </div>
+          </section>
+
+          <div className="flex items-center justify-between rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
+            <span className="text-sm text-muted-foreground">Total modal awal</span>
+            <span className="num text-sm font-semibold">{rupiah(editTotal)}</span>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" disabled={amend.isPending}>
+              {amend.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Simpan perbaikan
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setEditing(false)}>
+              Batal
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <section className="ledger-card p-6 sm:p-8">
+          <h2 className="text-lg font-bold">Modal awal shift ini</h2>
+          <p className="num mt-3 text-2xl font-bold gradient-text-gold sm:text-3xl">
+            {rupiah(shift.modal_awal)}
+          </p>
+          <div className="mt-5 flex items-center justify-between rounded-lg border border-border/50 bg-secondary/30 px-3 py-2 text-sm">
+            <span className="text-muted-foreground">Saldo Tunai Awal Buka Kasir</span>
+            <span className="num font-medium">{rupiah(shift.initial_physical_balance)}</span>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <OpeningList title="Bank" entries={opening.data?.bankMap} names={BANKS} />
+            <OpeningList title="PPOB" entries={opening.data?.ppobMap} names={PPOB_PROVIDERS} />
+          </div>
+        </section>
+      )}
+
+      {showCancel && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cancel-shift-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowCancel(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setShowCancel(false);
+          }}
+        >
+          <div className="glass-card w-full max-w-md p-6 text-center sm:p-8">
+            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-destructive/20">
+              <XCircle className="size-7 text-destructive" />
+            </div>
+            <h2 id="cancel-shift-title" className="mt-5 font-display text-xl font-bold">
+              Batalkan Shift?
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Shift ini akan dihapus dan Anda kembali ke halaman buka shift. Pembatalan tercatat dan
+              bisa dilihat owner.
+            </p>
+            <div className="mt-7 flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowCancel(false)}
+              >
+                Tidak
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                disabled={cancelShift.isPending}
+                onClick={() => cancelShift.mutate()}
+              >
+                {cancelShift.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                Ya, batalkan
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OpeningList({
+  title,
+  entries,
+  names,
+}: {
+  title: string;
+  entries: Record<string, number> | undefined;
+  names: readonly string[];
+}) {
+  const rows = names.filter((n) => (entries?.[n] ?? 0) > 0);
+  return (
+    <div className="rounded-xl border border-border/40 bg-secondary/20 p-3">
+      <h3 className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+        {title}
+      </h3>
+      <ul className="mt-2 space-y-1.5 text-sm">
+        {rows.length === 0 && <li className="text-muted-foreground">—</li>}
+        {rows.map((n) => (
+          <li key={n} className="flex justify-between gap-3">
+            <span className="text-muted-foreground">{n}</span>
+            <span className="num font-medium">{rupiah(entries?.[n] ?? 0)}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
