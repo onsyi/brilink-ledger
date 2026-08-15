@@ -32,6 +32,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      shift_amendments: {
+        Row: {
+          action: string;
+          after_data: Json | null;
+          before_data: Json;
+          created_at: string;
+          id: string;
+          shift_id: string;
+          user_id: string;
+        };
+        Insert: {
+          action: string;
+          after_data?: Json | null;
+          before_data: Json;
+          created_at?: string;
+          id?: string;
+          shift_id: string;
+          user_id: string;
+        };
+        Update: {
+          action?: string;
+          after_data?: Json | null;
+          before_data?: Json;
+          created_at?: string;
+          id?: string;
+          shift_id?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       bank_balances: {
         Row: {
           bank_name: string;

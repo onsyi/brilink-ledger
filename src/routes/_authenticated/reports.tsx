@@ -12,6 +12,7 @@ import {
   Receipt,
   Clock,
   TriangleAlert,
+  PencilLine,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -191,6 +192,45 @@ function Reports() {
       return { rows, matched, truncated: matched > rows.length };
     },
   });
+
+  // Amendments and cancellations of open shifts. A cancelled shift leaves no
+  // row in `shifts`, so the audit table below cannot show it — only this can.
+  const amendments = useQuery({
+    queryKey: ["shift-amendments", user?.id, role],
+    enabled: !!user?.id && !loading,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("shift_amendments")
+        .select("id, shift_id, user_id, action, before_data, after_data, created_at")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      const entries = data ?? [];
+      if (entries.length === 0) return [];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .in("id", [...new Set(entries.map((a) => a.user_id))]);
+      const nameOf = new Map((profiles ?? []).map((p) => [p.id, p.username]));
+      const modalOf = (d: unknown) =>
+        num((d as { modal_awal?: number | string } | null)?.modal_awal);
+      return entries.map((a) => ({
+        id: a.id,
+        shiftId: a.shift_id,
+        action: a.action,
+        at: a.created_at,
+        cashier: nameOf.get(a.user_id) ?? "—",
+        before: modalOf(a.before_data),
+        after: a.after_data ? modalOf(a.after_data) : null,
+      }));
+    },
+  });
+
+  const amendedShiftIds = useMemo(
+    () =>
+      new Set((amendments.data ?? []).filter((a) => a.action === "amend").map((a) => a.shiftId)),
+    [amendments.data],
+  );
 
   const rows = useMemo(() => shifts.data?.rows ?? [], [shifts.data]);
   const truncated = shifts.data?.truncated ?? false;
@@ -459,6 +499,14 @@ function Reports() {
                             minute: "2-digit",
                           })}
                         </span>
+                        {amendedShiftIds.has(r.shift.id) && (
+                          <span
+                            title="Modal awal shift ini pernah diperbaiki kasir"
+                            className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/15 px-1.5 py-0.5 text-[9px] font-bold text-warning"
+                          >
+                            <PencilLine className="size-2.5" /> diperbaiki
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3.5 font-medium">{r.cashier}</td>
@@ -506,6 +554,71 @@ function Reports() {
                         {r.shift.status === "open" ? "Aktif" : "Ditutup"}
                       </span>
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Riwayat perbaikan & pembatalan shift */}
+      <section className="glass-card p-5 sm:p-6">
+        <h2 className="text-base font-bold">Riwayat Perbaikan & Pembatalan Shift</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Koreksi modal awal dan pembatalan shift oleh kasir. Shift yang dibatalkan tidak muncul di
+          tabel di atas karena barisnya sudah terhapus — hanya tercatat di sini.
+        </p>
+
+        {amendments.isError ? (
+          <div className="mt-4">
+            <QueryError onRetry={() => amendments.refetch()} />
+          </div>
+        ) : amendments.isLoading ? (
+          <div className="flex min-h-[100px] items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Memuat riwayat…
+          </div>
+        ) : (amendments.data ?? []).length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Belum ada perbaikan atau pembatalan shift.
+          </p>
+        ) : (
+          <div className="mt-4 overflow-x-auto hide-scrollbar">
+            <table className="w-full min-w-[620px] text-sm">
+              <thead>
+                <tr className="border-b border-border/60 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                  <th className="pb-3">Waktu</th>
+                  <th className="pb-3">Kasir</th>
+                  <th className="pb-3">Tindakan</th>
+                  <th className="pb-3 text-right">Modal Awal Sebelum</th>
+                  <th className="pb-3 text-right">Modal Awal Sesudah</th>
+                </tr>
+              </thead>
+              <tbody className="num">
+                {(amendments.data ?? []).map((a) => (
+                  <tr key={a.id} className="border-b border-border/30 hover:bg-secondary/30">
+                    <td className="py-3 text-xs">
+                      {new Date(a.at).toLocaleString("id-ID", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </td>
+                    <td className="py-3 font-medium">{a.cashier}</td>
+                    <td className="py-3">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          a.action === "cancel"
+                            ? "border border-destructive/25 bg-destructive/15 text-destructive"
+                            : "border border-warning/30 bg-warning/15 text-warning"
+                        }`}
+                      >
+                        {a.action === "cancel" ? "Dibatalkan" : "Diperbaiki"}
+                      </span>
+                    </td>
+                    <td className="py-3 text-right">{rupiah(a.before)}</td>
+                    <td className="py-3 text-right">{a.after !== null ? rupiah(a.after) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
