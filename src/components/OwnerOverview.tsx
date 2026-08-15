@@ -91,6 +91,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                 bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
                 expenses: num(s.total_expenses),
                 settlement: num(s.settlement_amount),
+                additionalCapital: num(s.additional_capital),
               }),
       }));
       const today = new Date().toLocaleDateString("id-ID");
