@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { labaFee, num, rupiah } from "@/lib/ledger";
+import { labaFee, num, ppobTerpakai, rupiah } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
 import { QueryError } from "@/components/QueryError";
 
@@ -126,7 +126,7 @@ function Reports() {
         supabase.from("branches").select("id, name"),
         supabase
           .from("ppob_balances")
-          .select("shift_id, initial_amount, topup_amount, final_amount")
+          .select("shift_id, initial_amount, final_amount")
           .in("shift_id", ids),
         supabase
           .from("bank_balances")
@@ -139,10 +139,20 @@ function Reports() {
       (txns ?? []).forEach((t) => {
         txnCountByShift.set(t.shift_id, (txnCountByShift.get(t.shift_id) ?? 0) + 1);
       });
-      const ppobUsedByShift = new Map<string, number>();
+      // PPOB dibukukan terpisah dari BRILink. Penambahan saldo kini satu angka
+      // di level shift (topup_request); kolom per-provider
+      // ppob_balances.topup_amount tidak lagi diisi form penutupan.
+      const ppobInitialsByShift = new Map<string, number[]>();
+      const ppobFinalsByShift = new Map<string, number[]>();
       (ppobRows ?? []).forEach((p) => {
-        const used = num(p.initial_amount) + num(p.topup_amount) - num(p.final_amount);
-        ppobUsedByShift.set(p.shift_id, (ppobUsedByShift.get(p.shift_id) ?? 0) + used);
+        ppobInitialsByShift.set(p.shift_id, [
+          ...(ppobInitialsByShift.get(p.shift_id) ?? []),
+          num(p.initial_amount),
+        ]);
+        ppobFinalsByShift.set(p.shift_id, [
+          ...(ppobFinalsByShift.get(p.shift_id) ?? []),
+          num(p.final_amount),
+        ]);
       });
       const bankInitialsByShift = new Map<string, number>();
       const bankFinalsByShift = new Map<string, number>();
@@ -159,7 +169,11 @@ function Reports() {
       const rows = (shiftRows ?? []).map((s) => ({
         shift: s,
         txnCount: txnCountByShift.get(s.id) ?? 0,
-        ppobUsed: ppobUsedByShift.get(s.id) ?? 0,
+        ppobUsed: ppobTerpakai({
+          ppobInitials: ppobInitialsByShift.get(s.id) ?? [],
+          ppobFinals: ppobFinalsByShift.get(s.id) ?? [],
+          topup: num(s.topup_request),
+        }),
         laba:
           s.modal_akhir === null
             ? null
@@ -168,9 +182,7 @@ function Reports() {
                 finalPhysical: num(s.final_physical_balance),
                 bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
                 bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
-                expenses: num(s.total_expenses),
                 settlement: num(s.settlement_amount),
-                topup: num(s.topup_request),
               }),
         cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
         branchName: (s.branch_id && branchNameOf.get(s.branch_id)) || "—",

@@ -125,27 +125,53 @@ export function modalAkhir(opts: {
 }
 
 /**
- * Laba Fee (fee profit):
- *   (Saldo Akhir + total saldo rekening AKHIR + Pengeluaran + settlement)
- *   - (Saldo Awal + total saldo rekening AWAL + Penambahan Saldo)
- * where "Penambahan Saldo" is the top-up request amount.
+ * Laba Fee (fee profit) — the BRILink side only: physical cash and bank
+ * accounts.
+ *
+ *   (Saldo Akhir + total saldo rekening AKHIR + settlement)
+ *   - (Saldo Awal + total saldo rekening AWAL)
+ *
+ * Two things are deliberately absent.
+ *
+ * PPOB: its balances and its top-up are settled on their own ledger via
+ * {@link ppobTerpakai}. Folding the top-up in here double-counted it,
+ * because buying PPOB balance out of a bank account already shows up as a
+ * drop in the closing bank total.
+ *
+ * Pengeluaran and setoran owner: recorded and reported, never calculated.
+ * Cash spent on operating costs leaves the drawer, so it lowers Laba Fee
+ * through the closing cash figure on its own; adding it back would cancel
+ * that out. Both remain visible as their own columns in Laporan.
  */
 export function labaFee(opts: {
   initialPhysical: number;
   finalPhysical: number;
   bankInitials: number[];
   bankFinals: number[];
-  expenses: number;
   settlement: number;
-  topup: number;
 }) {
   const bankInitialTotal = opts.bankInitials.reduce((s, n) => s + n, 0);
   const bankFinalTotal = opts.bankFinals.reduce((s, n) => s + n, 0);
   return (
     opts.finalPhysical +
     bankFinalTotal +
-    opts.expenses +
     opts.settlement -
-    (opts.initialPhysical + bankInitialTotal + opts.topup)
+    (opts.initialPhysical + bankInitialTotal)
   );
+}
+
+/**
+ * Saldo PPOB yang terpakai selama shift — kept entirely separate from
+ * Laba Fee, since PPOB top-ups have nothing to do with the BRILink books.
+ *
+ *   total saldo awal PPOB + penambahan saldo - total saldo akhir PPOB
+ */
+export function ppobTerpakai(opts: {
+  ppobInitials: number[];
+  ppobFinals: number[];
+  topup: number;
+}) {
+  const initialTotal = opts.ppobInitials.reduce((s, n) => s + n, 0);
+  const finalTotal = opts.ppobFinals.reduce((s, n) => s + n, 0);
+  return initialTotal + opts.topup - finalTotal;
 }

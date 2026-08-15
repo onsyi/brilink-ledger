@@ -62,7 +62,6 @@ function CloseShift() {
   const [settlement, setSettlement] = useState("");
   const [banks, setBanks] = useState<Record<string, string>>({});
   const [ppob, setPpob] = useState<Record<string, string>>({});
-  const [ppobTopup, setPpobTopup] = useState<Record<string, string>>({});
   const [showConfirm, setShowConfirm] = useState(false);
   const submittingRef = useRef(false);
 
@@ -94,7 +93,6 @@ function CloseShift() {
       const ppobSnapshots = PPOB_PROVIDERS.map((p) => ({
         provider_name: p,
         final_amount: Number(ppob[p] || 0),
-        topup_amount: Number(ppobTopup[p] || 0),
       }));
 
       const { error } = await supabase.rpc("close_shift_atomic", {
@@ -205,7 +203,7 @@ function CloseShift() {
           <DollarSign className="size-4 text-primary" /> Kas Fisik, Pengeluaran & Setoran
         </h2>
         <p className="text-xs text-muted-foreground">
-          Lengkapi kas fisik, pengeluaran, top-up, setoran, dan settlement selama shift.
+          Lengkapi kas fisik, pengeluaran, setoran, dan settlement selama shift.
         </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MoneyInput
@@ -226,12 +224,6 @@ function CloseShift() {
             label="Pengeluaran operasional"
             value={expenses}
             onChange={setExpenses}
-          />
-          <MoneyInput
-            id="topup"
-            label="Permintaan top-up saldo"
-            value={topup}
-            onChange={setTopup}
           />
           <MoneyInput id="deposit" label="Setoran ke owner" value={deposit} onChange={setDeposit} />
           <MoneyInput
@@ -286,28 +278,29 @@ function CloseShift() {
           <CreditCard className="size-4 text-accent" /> Detail saldo PPOB
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Saldo akhir tiap provider, beserta penambahan saldo yang dilakukan selama shift.
+          Saldo akhir tiap provider, dan total penambahan saldo PPOB selama shift.
         </p>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {PPOB_PROVIDERS.map((p) => (
-            <div key={p} className="rounded-xl border border-border/40 bg-secondary/20 p-3">
-              <h3 className="text-xs font-semibold text-muted-foreground">{p}</h3>
-              <div className="mt-2 grid grid-cols-2 gap-3">
-                <MoneyInput
-                  id={`ppob-${p}`}
-                  label="Saldo akhir"
-                  value={ppob[p] ?? ""}
-                  onChange={(v) => setPpob((prev) => ({ ...prev, [p]: v }))}
-                />
-                <MoneyInput
-                  id={`ppob-topup-${p}`}
-                  label="Penambahan saldo"
-                  value={ppobTopup[p] ?? ""}
-                  onChange={(v) => setPpobTopup((prev) => ({ ...prev, [p]: v }))}
-                />
-              </div>
-            </div>
+            <MoneyInput
+              key={p}
+              id={`ppob-${p}`}
+              label={p}
+              value={ppob[p] ?? ""}
+              onChange={(v) => setPpob((prev) => ({ ...prev, [p]: v }))}
+            />
           ))}
+        </div>
+        <div className="mt-4 border-t border-border/40 pt-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <MoneyInput
+              id="topup"
+              label="Penambahan saldo PPOB"
+              value={topup}
+              onChange={setTopup}
+              hint="Total saldo PPOB yang ditambahkan selama shift"
+            />
+          </div>
         </div>
       </section>
 

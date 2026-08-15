@@ -89,9 +89,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                 finalPhysical: num(s.final_physical_balance),
                 bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
                 bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
-                expenses: num(s.total_expenses),
                 settlement: num(s.settlement_amount),
-                topup: num(s.topup_request),
               }),
       }));
       const today = new Date().toLocaleDateString("id-ID");
