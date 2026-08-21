@@ -55,6 +55,17 @@ type UserProfile = {
   is_active?: boolean;
 };
 
+/**
+ * Sejak profiles punya unique index pada lower(username), nama yang bentrok
+ * kembali sebagai 23505 dengan pesan mentah yang menyebut nama constraint.
+ * Yang perlu diketahui pengguna cuma satu: nama itu sudah dipakai.
+ */
+function usernameError(error: { code?: string; message: string }, name: string) {
+  return error.code === "23505" || error.message.includes("profiles_username_lower_key")
+    ? `Username "${name}" sudah dipakai. Pilih nama lain.`
+    : error.message;
+}
+
 function SettingsPage() {
   const { user, role, loading: authLoading } = useAuth();
   const isOwner = role === "owner";
@@ -217,7 +228,7 @@ function SettingsPage() {
       .eq("id", user.id);
     setSaving(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(usernameError(error, username.trim()));
     } else {
       toast.success("Profil tersimpan");
       fetchProfile();
@@ -412,7 +423,7 @@ function SettingsPage() {
         })
         .eq("id", editCashier.id);
       if (error) {
-        toast.error(error.message);
+        toast.error(usernameError(error, editUsername.trim()));
         setSavingCashier(false);
         return;
       }
