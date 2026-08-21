@@ -4,7 +4,6 @@ import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 
 const queryClient = new QueryClient({
@@ -33,11 +32,6 @@ supabase.auth.onAuthStateChange((event) => {
   }
 });
 
-function OfflineSyncProvider({ children }: { children: React.ReactNode }) {
-  useOfflineSync();
-  return <>{children}</>;
-}
-
 function RealtimeRefresh() {
   const queryClient = useQueryClient();
   useRealtimeRefresh(queryClient);
@@ -47,11 +41,9 @@ function RealtimeRefresh() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <OfflineSyncProvider>
-        <RealtimeRefresh />
-        <RouterProvider router={router} />
-        <Toaster richColors position="top-center" />
-      </OfflineSyncProvider>
+      <RealtimeRefresh />
+      <RouterProvider router={router} />
+      <Toaster richColors position="top-center" />
     </QueryClientProvider>
   );
 }

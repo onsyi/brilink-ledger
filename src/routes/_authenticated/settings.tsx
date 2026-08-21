@@ -60,6 +60,15 @@ type UserProfile = {
  * kembali sebagai 23505 dengan pesan mentah yang menyebut nama constraint.
  * Yang perlu diketahui pengguna cuma satu: nama itu sudah dipakai.
  */
+/**
+ * Sama persis dengan yang ditegakkan dua lapis di bawah: setelan kekuatan
+ * password project (untuk reset & ganti password sendiri) dan pemeriksaan di
+ * admin_create_user (untuk akun yang dibuat owner, yang melewati GoTrue).
+ * Di sini hanya supaya kesalahan ketahuan sebelum permintaan dikirim.
+ */
+const PASSWORD_RULE = "Password minimal 10 karakter dan harus memuat huruf serta angka";
+const isStrongPassword = (v: string) => v.length >= 10 && /[a-zA-Z]/.test(v) && /[0-9]/.test(v);
+
 function usernameError(error: { code?: string; message: string }, name: string) {
   return error.code === "23505" || error.message.includes("profiles_username_lower_key")
     ? `Username "${name}" sudah dipakai. Pilih nama lain.`
@@ -253,8 +262,8 @@ function SettingsPage() {
       toast.error("Password saat ini wajib diisi");
       return;
     }
-    if (newOwnPassword.length < 6) {
-      toast.error("Password baru minimal 6 karakter");
+    if (!isStrongPassword(newOwnPassword)) {
+      toast.error(PASSWORD_RULE);
       return;
     }
     if (newOwnPassword !== confirmOwnPassword) {
@@ -295,8 +304,8 @@ function SettingsPage() {
       toast.error("Semua field wajib diisi");
       return;
     }
-    if (newPassword.length < 6) {
-      toast.error("Password minimal 6 karakter");
+    if (!isStrongPassword(newPassword)) {
+      toast.error(PASSWORD_RULE);
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail.trim())) {
@@ -736,7 +745,7 @@ function SettingsPage() {
                 type={showPasswords ? "text" : "password"}
                 value={newOwnPassword}
                 onChange={(e) => setNewOwnPassword(e.target.value)}
-                placeholder="Minimal 6 karakter"
+                placeholder="Password minimal 10 karakter, memuat huruf dan angka"
                 maxLength={72}
                 autoComplete="new-password"
                 className="h-11"
@@ -808,7 +817,7 @@ function SettingsPage() {
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Minimal 6 karakter"
+                placeholder="Password minimal 10 karakter, memuat huruf dan angka"
                 maxLength={72}
                 className="h-11"
               />

@@ -8,7 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const passwordSchema = z.string().min(6, "Password minimal 6 karakter").max(72);
+const passwordSchema = z
+  .string()
+  .min(10, "Password minimal 10 karakter")
+  .max(72)
+  .regex(/[a-zA-Z]/, "Password harus memuat huruf")
+  .regex(/[0-9]/, "Password harus memuat angka");
 
 export const Route = createFileRoute("/reset-password")({
   ssr: false,
@@ -143,7 +148,7 @@ function ResetPasswordPage() {
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Minimal 6 karakter"
+                      placeholder="Password minimal 10 karakter, memuat huruf dan angka"
                       maxLength={72}
                       autoComplete="new-password"
                       required
