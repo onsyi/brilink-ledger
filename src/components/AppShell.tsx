@@ -21,7 +21,6 @@ import { SessionTimeoutDialog } from "@/components/SessionTimeoutDialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getAllPending, isOnline, clearPending } from "@/lib/offline-db";
 
 const nav = [
   { to: "/dashboard", label: "Shift", icon: LayoutDashboard, ownerLabel: "Ringkasan" },
@@ -31,74 +30,39 @@ const nav = [
   { to: "/settings", label: "Pengaturan", icon: Settings },
 ] as const;
 
+/**
+ * Indikator jaringan, bukan indikator sinkronisasi.
+ *
+ * Versi sebelumnya juga menampilkan "Sync N" dari antrean IndexedDB, tapi
+ * antrean itu tidak pernah diisi siapa pun -- tidak ada satu pun kode yang
+ * menulis ke store `pending-sync`. Angkanya selalu nol, dan keberadaannya
+ * menjanjikan kemampuan offline yang tidak ada: kalau koneksi putus di tengah
+ * shift, tidak ada apa pun yang tersimpan untuk dikirim ulang. Janji itu
+ * dibuang; yang tersisa adalah satu hal yang memang benar dan memang berguna
+ * bagi kasir -- bahwa saat ini sedang tidak ada koneksi.
+ */
 function OfflineBadge() {
-  const [count, setCount] = useState(0);
-  const [online, setOnline] = useState(isOnline());
-  const countRef = useRef(0);
-  countRef.current = count;
+  const [online, setOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
 
   useEffect(() => {
-    let active = true;
-    const check = async () => {
-      if (!active) return;
-      setOnline(isOnline());
-      const pending = await getAllPending();
-      if (active) setCount(pending.length);
-    };
-    check();
-
-    // Only poll when offline or when there are pending items
-    let interval: ReturnType<typeof setInterval> | null = null;
-    const startPolling = () => {
-      if (interval) return;
-      interval = setInterval(async () => {
-        const p = await getAllPending();
-        if (!active) return;
-        setCount(p.length);
-        setOnline(isOnline());
-        // Stop polling once back online and no pending items
-        if (isOnline() && p.length === 0 && interval) {
-          clearInterval(interval);
-          interval = null;
-        }
-      }, 10000);
-    };
-
-    const onOnline = () => {
-      check();
-      startPolling();
-    };
-    const onOffline = () => {
-      check();
-      startPolling();
-    };
-
-    // Start polling immediately if offline or has pending
-    if (!isOnline() || countRef.current > 0) startPolling();
-
-    window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
+    const sync = () => setOnline(navigator.onLine);
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    sync();
     return () => {
-      active = false;
-      if (interval) clearInterval(interval);
-      window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
     };
   }, []);
 
-  if (online && count === 0) return null;
+  if (online) return null;
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide backdrop-blur-sm transition-all",
-        !online
-          ? "border border-warning/40 bg-warning/10 text-warning animate-pulse"
-          : "border border-primary/40 bg-primary/10 text-primary shadow-[0_0_10px_-3px] shadow-primary/30",
-      )}
-    >
-      {!online ? <WifiOff className="size-3" /> : <Loader2 className="size-3 animate-spin" />}
-      {!online ? "Offline" : `Sync ${count}`}
+    <span className="border-warning/40 bg-warning/10 text-warning inline-flex animate-pulse items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-wide backdrop-blur-sm">
+      <WifiOff className="size-3" />
+      Offline
     </span>
   );
 }
@@ -122,11 +86,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await queryClient.cancelQueries();
     queryClient.clear();
-    try {
-      await clearPending();
-    } catch {
-      // IndexedDB may be unavailable; ignore during sign-out.
-    }
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
   };

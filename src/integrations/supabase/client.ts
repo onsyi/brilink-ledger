@@ -27,7 +27,13 @@ function createSupabaseClient() {
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
-      storage: typeof window !== "undefined" ? localStorage : undefined,
+      // sessionStorage, bukan localStorage: terminal toko dipegang bergantian,
+      // dan token yang bertahan melewati penutupan browser berarti kasir
+      // berikutnya membuka aplikasi sebagai orang sebelumnya. Ongkosnya login
+      // ulang setiap browser dibuka — di sini itu justru yang diinginkan,
+      // karena pergantian browser biasanya menandai pergantian orang.
+      // Idle timeout 30 menit di useSessionTimeout tetap berlaku di dalam sesi.
+      storage: typeof window !== "undefined" ? sessionStorage : undefined,
       persistSession: true,
       autoRefreshToken: true,
     },

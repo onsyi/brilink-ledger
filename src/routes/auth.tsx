@@ -212,7 +212,7 @@ function AuthPage() {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Minimal 6 karakter"
+                    placeholder="Password Anda"
                     maxLength={72}
                     autoComplete="current-password"
                     className="h-11 pr-11 transition-all focus-visible:ring-primary/50"
