@@ -463,6 +463,20 @@ export type Database = {
         };
         Returns: undefined;
       };
+      last_closed_shift_balances: {
+        Args: Record<string, never>;
+        Returns: {
+          shift: {
+            id: string;
+            end_time: string | null;
+            final_physical_balance: number | null;
+            closed_by: string | null;
+            is_own: boolean;
+          };
+          banks: { bank_name: string; final_amount: number }[];
+          ppob: { provider_name: string; final_amount: number }[];
+        } | null;
+      };
       open_shift_atomic: {
         Args: {
           _user_id: string;
