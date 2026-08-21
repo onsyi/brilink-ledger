@@ -76,36 +76,31 @@ function OpenShiftPanel({
   const [hydrated, setHydrated] = useState(false);
   const isBranchMissing = !branchId;
 
+  // Saldo bank/PPOB menempel pada cabang, bukan pada kasir -- shift kedua di
+  // outlet yang sama harus melanjutkan angka penutupan shift pertama meski yang
+  // jaga orang lain. RLS shifts_select hanya membuka baris milik sendiri, jadi
+  // snapshot-nya diambil lewat RPC yang menentukan cabang dari profil pemanggil.
   const lastShift = useQuery({
-    queryKey: ["last-closed-shift", userId],
+    queryKey: ["last-closed-shift", branchId ?? userId],
     enabled: !!userId,
     staleTime: 0,
     queryFn: async () => {
-      const { data: shift } = await supabase
-        .from("shifts")
-        .select(
-          "id, end_time, final_physical_balance, bank_balances(bank_name, final_amount), ppob_balances(provider_name, final_amount)",
-        )
-        .eq("user_id", userId!)
-        .eq("status", "closed")
-        .order("end_time", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!shift) return null;
+      const { data, error } = await supabase.rpc("last_closed_shift_balances");
+      if (error) throw error;
+      if (!data) return null;
       return {
-        shift: {
-          id: shift.id,
-          end_time: shift.end_time,
-          final_physical_balance: shift.final_physical_balance,
-        },
-        banks: (shift["bank_balances"] ?? []) as { bank_name: string; final_amount: number }[],
-        ppob: (shift["ppob_balances"] ?? []) as { provider_name: string; final_amount: number }[],
+        shift: data.shift,
+        banks: data.banks ?? [],
+        ppob: data.ppob ?? [],
       };
     },
   });
 
   useEffect(() => {
-    if (hydrated || lastShift.isLoading) return;
+    // Menunggu query selesai *dan* berhasil. Hydrating saat error akan mengunci
+    // form pada nilai kosong: `hydrated` sekali true tidak pernah dibuka lagi,
+    // jadi refetch yang berhasil tidak akan mengisi ulang kolomnya.
+    if (hydrated || lastShift.isPending || lastShift.isError) return;
     const prev = lastShift.data;
     const bankMap: Record<string, string> = {};
     for (const b of BANKS) {
@@ -120,7 +115,7 @@ function OpenShiftPanel({
     setBanks(bankMap);
     setPpob(ppobMap);
     setHydrated(true);
-  }, [hydrated, lastShift.isLoading, lastShift.data]);
+  }, [hydrated, lastShift.isPending, lastShift.isError, lastShift.data]);
 
   const openingTotal = modalAwal({
     initialPhysical: num(initial),
@@ -154,7 +149,7 @@ function OpenShiftPanel({
     onSuccess: () => {
       toast.success("Shift dibuka");
       queryClient.invalidateQueries({ queryKey: ["open-shift", userId] });
-      queryClient.invalidateQueries({ queryKey: ["last-closed-shift", userId] });
+      queryClient.invalidateQueries({ queryKey: ["last-closed-shift"] });
     },
     onError: (e: Error & { code?: string }) =>
       toast.error(
@@ -167,6 +162,39 @@ function OpenShiftPanel({
   const digitalCarry =
     (lastShift.data?.banks.reduce((s, b) => s + num(b.final_amount), 0) ?? 0) +
     (lastShift.data?.ppob.reduce((s, p) => s + num(p.final_amount), 0) ?? 0);
+
+  // Kalau shift sebelumnya ditutup kasir lain, sebutkan namanya: angka yang
+  // muncul di form bukan bekas ketikan sendiri, jadi serah terimanya harus
+  // terbaca -- itu yang menentukan siapa yang ditanya kalau saldonya meleset.
+  const prevShift = lastShift.data?.shift;
+  const handoverBy = prevShift && !prevShift.is_own ? prevShift.closed_by : null;
+  const carryNote = lastShift.data
+    ? handoverBy
+      ? `Terkunci ke saldo akhir shift ${handoverBy}.`
+      : "Terkunci ke saldo akhir shift sebelumnya."
+    : "Isi manual hanya untuk shift pertama kali.";
+
+  // Cermin dari assert_opening_continuity(): akun yang punya saldo akhir di
+  // shift sebelumnya wajib dibuka dengan angka yang sama. Database tetap yang
+  // menolak -- ini cuma supaya kasir tahu sebelum menekan tombol, bukan lewat
+  // toast merah sesudahnya. Menunggu `hydrated` agar form yang masih kosong
+  // tidak dibaca sebagai selisih.
+  const carriedBank = new Map(
+    (lastShift.data?.banks ?? []).map((b) => [b.bank_name, num(b.final_amount)]),
+  );
+  const carriedPpob = new Map(
+    (lastShift.data?.ppob ?? []).map((p) => [p.provider_name, num(p.final_amount)]),
+  );
+  const lockedMismatch = !hydrated
+    ? []
+    : [
+        ...BANKS.filter((b) => carriedBank.has(b) && num(banks[b]) !== carriedBank.get(b)).map(
+          (b) => `${b} harus ${rupiah(carriedBank.get(b))}`,
+        ),
+        ...PPOB_PROVIDERS.filter(
+          (p) => carriedPpob.has(p) && num(ppob[p]) !== carriedPpob.get(p),
+        ).map((p) => `${p} harus ${rupiah(carriedPpob.get(p))}`),
+      ];
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
@@ -211,11 +239,7 @@ function OpenShiftPanel({
               <Building2 className="size-4 text-digital" />
               <h2 className="text-sm font-bold">Saldo awal rekening (Bank)</h2>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {lastShift.data
-                ? "Terisi otomatis dari saldo akhir shift sebelumnya — bisa dikoreksi."
-                : "Isi manual hanya untuk shift pertama kali."}
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">{carryNote}</p>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {BANKS.map((b) => (
                 <MoneyInput
@@ -234,11 +258,7 @@ function OpenShiftPanel({
               <CreditCard className="size-4 text-accent" />
               <h2 className="text-sm font-bold">Saldo awal PPOB</h2>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {lastShift.data
-                ? "Terisi otomatis dari saldo akhir shift sebelumnya — bisa dikoreksi."
-                : "Isi manual hanya untuk shift pertama kali."}
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">{carryNote}</p>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {PPOB_PROVIDERS.map((p) => (
                 <MoneyInput
@@ -251,6 +271,22 @@ function OpenShiftPanel({
               ))}
             </div>
           </section>
+
+          {lockedMismatch.length > 0 && (
+            <div className="flex gap-2.5 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+              <div className="text-xs">
+                <p className="font-semibold text-destructive">
+                  Saldo awal tidak cocok dengan penutupan shift sebelumnya
+                </p>
+                <p className="mt-1 text-muted-foreground">{lockedMismatch.join(", ")}.</p>
+                <p className="mt-1 text-muted-foreground">
+                  Kalau angka penutupan itu yang keliru, minta owner mengauditnya lebih dulu — shift
+                  tidak bisa dibuka dengan angka yang berbeda.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
             <div className="flex items-center justify-between">
@@ -288,19 +324,20 @@ function OpenShiftPanel({
           <div>
             <h2 className="text-lg font-bold">Saldo digital sebelumnya</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Dari snapshot penutupan terakhir. Terisi otomatis ke form di samping.
+              Snapshot penutupan terakhir di cabang ini
+              {handoverBy ? ` oleh ${handoverBy}` : ""}. Terisi otomatis ke form di samping.
             </p>
           </div>
         </div>
         {lastShift.isError ? (
           <QueryError onRetry={() => lastShift.refetch()} />
-        ) : lastShift.isLoading ? (
+        ) : lastShift.isPending ? (
           <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> Memuat…
           </div>
         ) : !lastShift.data ? (
           <p className="mt-6 rounded-xl border border-border/60 bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
-            Belum ada shift tertutup. Snapshot tersedia setelah shift pertama ditutup.
+            Belum ada shift tertutup di cabang ini. Snapshot tersedia setelah shift pertama ditutup.
           </p>
         ) : (
           <>

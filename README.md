@@ -52,7 +52,7 @@ Implementasi Session Timeout otomatis untuk mencegah akses tidak sah pada perang
 
 State Check Logic: Sistem harus memvalidasi bahwa tidak ada shift aktif di perangkat yang sama. Pembukaan shift baru hanya diizinkan jika shift sebelumnya telah status "Closed".
 
-Machine Money Balance: Sistem secara otomatis melakukan state-pulling data saldo digital (Bank & PPOB) dari saldo akhir shift sebelumnya untuk menjaga kontinuitas data.
+Machine Money Balance: Sistem secara otomatis melakukan state-pulling data saldo digital (Bank & PPOB) dari saldo akhir shift sebelumnya untuk menjaga kontinuitas data. Sumbernya shift tertutup terakhir di cabang yang sama — bukan shift terakhir kasir yang bersangkutan — dan kontinuitas itu ditegakkan di database: open_shift_atomic dan amend_open_shift menolak saldo awal yang berbeda dari saldo akhir shift sebelumnya. Akun yang belum pernah tercatat (shift pertama sebuah cabang, atau bank/provider yang baru ditambahkan) tetap bebas diisi.
 
 Input Manual Saldo: Kasir wajib mengisi Saldo Fisik Awal (uang tunai di laci) secara manual sebagai modal awal shift.
 
