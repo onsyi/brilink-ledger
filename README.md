@@ -146,6 +146,8 @@ I-Simpel
 
 Jumlah Saldo Akhir I-Simpel
 
+Penolakan Laporan (Report Rejection): Owner dapat menolak laporan penutupan sebuah shift dari halaman Laporan & Audit dengan alasan wajib. Shift kembali berstatus "Open" pada kasir yang bersangkutan, angka penutupannya (saldo tunai akhir, saldo bank/PPOB akhir, pengeluaran, setoran, settlement, dan konfirmasi setoran) dikosongkan, sedangkan modal awal tidak berubah. Form Tutup Shift terisi kembali dengan angka lama sebagai bahan koreksi, dan alasan penolakan ditampilkan ke kasir. Penolakan hanya diizinkan pada shift terakhir di cabang tersebut — jika saldo penutupannya sudah dipakai sebagai modal awal shift berikutnya, owner memakai fitur Audit Saldo agar rantai saldo antar shift tidak putus. Setiap penolakan tercatat permanen di riwayat beserta angka yang dibatalkan.
+
 3.5 Setoran Kasir (Cashier Deposit)
 
 Fitur dokumentasi serah terima uang fisik dari kasir kepada pemilik.

@@ -15,6 +15,7 @@ import {
   TriangleAlert,
   PencilLine,
   ScanLine,
+  Undo2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -91,6 +92,14 @@ function Reports() {
     cashier: string;
     startedAt: string;
   } | null>(null);
+  const [rejectShift, setRejectShift] = useState<{
+    id: string;
+    cashier: string;
+    startedAt: string;
+    modalAkhir: number;
+    deposit: number;
+    depositConfirmed: boolean;
+  } | null>(null);
 
   const branches = useQuery({
     queryKey: ["branches"],
@@ -114,7 +123,7 @@ function Reports() {
       let query = supabase
         .from("shifts")
         .select(
-          "id, user_id, start_time, initial_physical_balance, final_physical_balance, modal_awal, modal_akhir, additional_capital, settlement_amount, total_expenses, expense_notes, deposit_amount, deposit_confirmed, topup_request, status, branch_id",
+          "id, user_id, start_time, initial_physical_balance, final_physical_balance, modal_awal, modal_akhir, additional_capital, settlement_amount, total_expenses, expense_notes, deposit_amount, deposit_confirmed, topup_request, status, branch_id, rejected_at, rejection_reason",
           { count: "exact" },
         )
         .order("start_time", { ascending: false })
@@ -233,6 +242,8 @@ function Reports() {
       const nameOf = new Map((profiles ?? []).map((p) => [p.id, p.username]));
       type Payload = {
         modal_awal?: number | string | null;
+        modal_akhir?: number | string | null;
+        deposit_amount?: number | string | null;
         kind?: string;
         name?: string;
         field?: string;
@@ -254,7 +265,10 @@ function Reports() {
             a.action === "audit" && before?.name
               ? `${before.name} · saldo ${before.field === "initial" ? "awal" : "akhir"} · ` +
                 `${rupiah(before.value)} → ${rupiah(after?.value)}`
-              : null,
+              : a.action === "reject"
+                ? `Modal akhir ${rupiah(before?.modal_akhir)} · setoran ` +
+                  `${rupiah(before?.deposit_amount)} dikembalikan ke kasir untuk diperbaiki`
+                : null,
           reason: after?.reason ?? before?.reason ?? null,
         };
       });
@@ -516,7 +530,7 @@ function Reports() {
                   <th className="pb-3 text-right">Modal Akhir</th>
                   <th className="pb-3 text-right">Laba Fee</th>
                   <th className="pb-3 text-center">Status</th>
-                  {isOwner && <th className="pb-3 text-center">Audit</th>}
+                  {isOwner && <th className="pb-3 text-center">Tindakan</th>}
                 </tr>
               </thead>
               <tbody className="num">
@@ -542,6 +556,16 @@ function Reports() {
                             className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/15 px-1.5 py-0.5 text-[9px] font-bold text-warning"
                           >
                             <PencilLine className="size-2.5" /> diperbaiki
+                          </span>
+                        )}
+                        {r.shift.rejected_at && (
+                          <span
+                            title={`Laporan penutupan pernah ditolak owner — alasan: ${
+                              r.shift.rejection_reason ?? "—"
+                            }`}
+                            className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/15 px-1.5 py-0.5 text-[9px] font-bold text-destructive"
+                          >
+                            <Undo2 className="size-2.5" /> ditolak
                           </span>
                         )}
                       </div>
@@ -605,19 +629,40 @@ function Reports() {
                     </td>
                     {isOwner && (
                       <td className="py-3.5 text-center">
-                        <button
-                          onClick={() =>
-                            setAuditShift({
-                              id: r.shift.id,
-                              cashier: r.cashier,
-                              startedAt: r.shift.start_time,
-                            })
-                          }
-                          title="Koreksi saldo bank / PPOB shift ini"
-                          className="inline-flex items-center gap-1 rounded-lg border border-border/60 px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-                        >
-                          <ScanLine className="size-3" /> Audit
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() =>
+                              setAuditShift({
+                                id: r.shift.id,
+                                cashier: r.cashier,
+                                startedAt: r.shift.start_time,
+                              })
+                            }
+                            title="Koreksi saldo bank / PPOB shift ini"
+                            className="inline-flex items-center gap-1 rounded-lg border border-border/60 px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                          >
+                            <ScanLine className="size-3" /> Audit
+                          </button>
+                          {/* Hanya shift tertutup yang punya laporan untuk ditolak. */}
+                          {r.shift.status === "closed" && (
+                            <button
+                              onClick={() =>
+                                setRejectShift({
+                                  id: r.shift.id,
+                                  cashier: r.cashier,
+                                  startedAt: r.shift.start_time,
+                                  modalAkhir: num(r.shift.modal_akhir),
+                                  deposit: num(r.shift.deposit_amount),
+                                  depositConfirmed: !!r.shift.deposit_confirmed,
+                                })
+                              }
+                              title="Kembalikan laporan ini ke kasir untuk diperbaiki"
+                              className="inline-flex items-center gap-1 rounded-lg border border-destructive/30 px-2 py-1 text-[10px] font-semibold text-destructive transition-colors hover:border-destructive/60 hover:bg-destructive/10"
+                            >
+                              <Undo2 className="size-3" /> Tolak
+                            </button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -628,12 +673,13 @@ function Reports() {
         )}
       </section>
 
-      {/* Riwayat perbaikan & pembatalan shift */}
+      {/* Riwayat perbaikan, penolakan & pembatalan shift */}
       <section className="glass-card p-5 sm:p-6">
-        <h2 className="text-base font-bold">Riwayat Perbaikan & Pembatalan Shift</h2>
+        <h2 className="text-base font-bold">Riwayat Perbaikan, Penolakan & Pembatalan Shift</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Koreksi modal awal dan pembatalan shift oleh kasir. Shift yang dibatalkan tidak muncul di
-          tabel di atas karena barisnya sudah terhapus — hanya tercatat di sini.
+          Koreksi modal awal dan pembatalan shift oleh kasir, audit saldo dan penolakan laporan oleh
+          owner. Shift yang dibatalkan tidak muncul di tabel di atas karena barisnya sudah terhapus
+          — hanya tercatat di sini.
         </p>
 
         {amendments.isError ? (
@@ -675,7 +721,7 @@ function Reports() {
                     <td className="py-3 align-top">
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                          a.action === "cancel"
+                          a.action === "cancel" || a.action === "reject"
                             ? "border border-destructive/25 bg-destructive/15 text-destructive"
                             : a.action === "audit"
                               ? "border border-primary/30 bg-primary/15 text-primary"
@@ -684,9 +730,11 @@ function Reports() {
                       >
                         {a.action === "cancel"
                           ? "Dibatalkan"
-                          : a.action === "audit"
-                            ? "Audit owner"
-                            : "Diperbaiki"}
+                          : a.action === "reject"
+                            ? "Laporan ditolak"
+                            : a.action === "audit"
+                              ? "Audit owner"
+                              : "Diperbaiki"}
                       </span>
                     </td>
                     <td className="py-3 align-top text-xs">
@@ -717,7 +765,125 @@ function Reports() {
       </section>
 
       {auditShift && <BalanceAuditDialog shift={auditShift} onClose={() => setAuditShift(null)} />}
+      {rejectShift && (
+        <RejectReportDialog shift={rejectShift} onClose={() => setRejectShift(null)} />
+      )}
     </div>
+  );
+}
+
+/**
+ * Owner-only rejection of a closed shift report.
+ *
+ * Goes through owner_reject_shift_report(), which needs a reason, returns the
+ * shift to 'open' with its closing figures cleared, keeps a copy so the
+ * cashier's form can be pre-filled, and records the whole thing in the
+ * amendment trail. Everything the server refuses — a newer shift already
+ * carrying these balances, or the cashier already running another shift —
+ * comes back as a plain-language toast.
+ */
+function RejectReportDialog({
+  shift,
+  onClose,
+}: {
+  shift: {
+    id: string;
+    cashier: string;
+    startedAt: string;
+    modalAkhir: number;
+    deposit: number;
+    depositConfirmed: boolean;
+  };
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [reason, setReason] = useState("");
+
+  const reject = useMutation({
+    mutationFn: async () => {
+      if (reason.trim().length < 5)
+        throw new Error("Alasan penolakan wajib diisi (minimal 5 karakter)");
+      const { error } = await supabase.rpc("owner_reject_shift_report", {
+        _shift_id: shift.id,
+        _reason: reason.trim(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success(`Laporan dikembalikan ke ${shift.cashier} untuk diperbaiki`);
+      queryClient.invalidateQueries({ queryKey: ["shift-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["shift-amendments"] });
+      queryClient.invalidateQueries({ queryKey: ["owner-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["deposit-shifts"] });
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="glass-card">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 font-display text-xl font-bold">
+            <Undo2 className="size-5 text-destructive" /> Tolak Laporan Shift
+          </DialogTitle>
+          <DialogDescription>
+            Shift <span className="font-medium">{shift.cashier}</span> ·{" "}
+            {new Date(shift.startedAt).toLocaleString("id-ID")}. Shift kembali terbuka dan kasir
+            mengisi ulang form Tutup Shift dengan angka lamanya sebagai awalan.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-xs">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Modal akhir yang dibatalkan</span>
+              <span className="num font-semibold">{rupiah(shift.modalAkhir)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Setoran yang dibatalkan</span>
+              <span className="num font-semibold">{rupiah(shift.deposit)}</span>
+            </div>
+            <p className="text-muted-foreground">
+              Saldo tunai akhir, saldo bank/PPOB akhir, pengeluaran, setoran, dan settlement
+              dikosongkan.
+              {shift.depositConfirmed
+                ? " Konfirmasi setoran ikut dibatalkan — setoran perlu dikonfirmasi ulang setelah kasir menutup shift lagi."
+                : ""}{" "}
+              Modal awal shift tidak berubah.
+            </p>
+            <p className="text-muted-foreground">
+              Hanya shift terakhir di cabang yang bisa ditolak. Kalau saldo penutupannya sudah
+              dipakai sebagai modal awal shift berikutnya, pakai tombol Audit.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="reject-reason" className="text-xs text-muted-foreground">
+              Alasan penolakan (wajib, dibaca kasir)
+            </Label>
+            <Input
+              id="reject-reason"
+              value={reason}
+              maxLength={200}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Contoh: Saldo BRI D tidak cocok dengan mutasi rekening, cek ulang"
+              className="h-10"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>
+            Batal
+          </Button>
+          <Button variant="destructive" onClick={() => reject.mutate()} disabled={reject.isPending}>
+            {reject.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+            Tolak & kembalikan
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

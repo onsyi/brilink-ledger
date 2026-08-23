@@ -10,6 +10,7 @@ import {
   TrendingUp,
   Clock,
   UserCheck,
+  Undo2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       let query = supabase
         .from("shifts")
         .select(
-          "id, user_id, start_time, initial_physical_balance, final_physical_balance, total_expenses, expense_notes, topup_request, settlement_amount, status, branch_id, modal_awal, modal_akhir, additional_capital",
+          "id, user_id, start_time, initial_physical_balance, final_physical_balance, total_expenses, expense_notes, topup_request, settlement_amount, status, branch_id, modal_awal, modal_akhir, additional_capital, rejected_at, rejection_reason",
         )
         .order("start_time", { ascending: false })
         .limit(60);
@@ -220,6 +221,17 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                       <span className="relative inline-flex size-2 rounded-full bg-success" />
                     </span>
                     <span className="font-semibold">{r.cashier}</span>
+                    {/* Shift yang laporannya ditolak kembali terbuka. Tanpa
+                        penanda ini, shift tersebut duduk di daftar "sedang
+                        berjalan" tanpa keterangan bahwa ia menunggu perbaikan. */}
+                    {r.shift.rejected_at && (
+                      <span
+                        title={`Laporan ditolak — alasan: ${r.shift.rejection_reason ?? "—"}`}
+                        className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/15 px-2 py-0.5 text-[10px] font-bold text-destructive"
+                      >
+                        <Undo2 className="size-2.5" /> menunggu perbaikan
+                      </span>
+                    )}
                   </div>
                   <span className="num inline-flex items-center gap-1.5 rounded-lg bg-secondary/50 px-2 py-0.5 text-[11px] text-muted-foreground">
                     <Clock className="size-3" />
