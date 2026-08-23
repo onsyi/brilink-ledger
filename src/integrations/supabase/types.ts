@@ -235,6 +235,9 @@ export type Database = {
           initial_physical_balance: number;
           modal_akhir: number | null;
           modal_awal: number | null;
+          rejected_at: string | null;
+          rejected_snapshot: Json | null;
+          rejection_reason: string | null;
           settlement_amount: number;
           start_time: string;
           status: Database["public"]["Enums"]["shift_status"];
@@ -255,6 +258,9 @@ export type Database = {
           initial_physical_balance?: number;
           modal_akhir?: number | null;
           modal_awal?: number | null;
+          rejected_at?: string | null;
+          rejected_snapshot?: Json | null;
+          rejection_reason?: string | null;
           settlement_amount?: number;
           start_time?: string;
           status?: Database["public"]["Enums"]["shift_status"];
@@ -275,6 +281,9 @@ export type Database = {
           initial_physical_balance?: number;
           modal_akhir?: number | null;
           modal_awal?: number | null;
+          rejected_at?: string | null;
+          rejected_snapshot?: Json | null;
+          rejection_reason?: string | null;
           settlement_amount?: number;
           start_time?: string;
           status?: Database["public"]["Enums"]["shift_status"];
@@ -444,6 +453,13 @@ export type Database = {
           _name: string;
           _field: string;
           _new_value: number;
+          _reason: string;
+        };
+        Returns: undefined;
+      };
+      owner_reject_shift_report: {
+        Args: {
+          _shift_id: string;
           _reason: string;
         };
         Returns: undefined;

@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -9,6 +9,7 @@ import {
   Building2,
   ArrowRight,
   DollarSign,
+  Undo2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -63,7 +64,31 @@ function CloseShift() {
   const [banks, setBanks] = useState<Record<string, string>>({});
   const [ppob, setPpob] = useState<Record<string, string>>({});
   const [showConfirm, setShowConfirm] = useState(false);
+  const [prefilled, setPrefilled] = useState(false);
   const submittingRef = useRef(false);
+
+  // Laporan yang ditolak owner dikembalikan lengkap dengan angkanya. Yang
+  // diminta koreksi, bukan ketik ulang: sepuluh saldo bank dan lima PPOB yang
+  // harus diketik ulang dari nol justru tempat kesalahan baru bermunculan.
+  const rejectedSnapshot = shiftQuery.data?.rejected_snapshot ?? null;
+  useEffect(() => {
+    if (prefilled || !rejectedSnapshot) return;
+    const money = (v: number | string | null | undefined) => String(num(v) || "");
+    const bankMap: Record<string, string> = {};
+    for (const b of BANKS) bankMap[b] = money(rejectedSnapshot.bank?.[b]);
+    const ppobMap: Record<string, string> = {};
+    for (const p of PPOB_PROVIDERS) ppobMap[p] = money(rejectedSnapshot.ppob?.[p]);
+    setFinalCash(money(rejectedSnapshot.final_physical_balance));
+    setAdditionalCapital(money(rejectedSnapshot.additional_capital));
+    setExpenses(money(rejectedSnapshot.total_expenses));
+    setExpenseNotes(rejectedSnapshot.expense_notes ?? "");
+    setTopup(money(rejectedSnapshot.topup_request));
+    setDeposit(money(rejectedSnapshot.deposit_amount));
+    setSettlement(money(rejectedSnapshot.settlement_amount));
+    setBanks(bankMap);
+    setPpob(ppobMap);
+    setPrefilled(true);
+  }, [prefilled, rejectedSnapshot]);
 
   const close = useMutation({
     mutationFn: async () => {
@@ -190,6 +215,27 @@ function CloseShift() {
           Validasi kas fisik, dokumentasi pengeluaran, dan snapshot saldo mesin.
         </p>
       </div>
+
+      {shiftQuery.data.rejected_at && (
+        <div className="flex gap-2.5 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 backdrop-blur-sm">
+          <Undo2 className="mt-0.5 size-4 shrink-0 text-destructive" />
+          <div className="text-xs">
+            <p className="font-semibold text-destructive">
+              Laporan shift ini ditolak owner —{" "}
+              {new Date(shiftQuery.data.rejected_at).toLocaleString("id-ID")}
+            </p>
+            {shiftQuery.data.rejection_reason && (
+              <p className="mt-1 italic text-muted-foreground">
+                “{shiftQuery.data.rejection_reason}”
+              </p>
+            )}
+            <p className="mt-1 text-muted-foreground">
+              Angka di bawah adalah isian laporan Anda sebelumnya. Perbaiki yang keliru, lalu tutup
+              shift lagi. Modal awal shift tidak ikut berubah.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Main Inputs */}
       <section className="glass-card p-5 sm:p-6 space-y-4">

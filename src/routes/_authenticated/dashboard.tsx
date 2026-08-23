@@ -12,6 +12,7 @@ import {
   Building2,
   Pencil,
   XCircle,
+  Undo2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -509,6 +510,36 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: OpenShif
           </Button>
         </div>
       </div>
+
+      {/* Laporan yang dikembalikan owner. Alasannya menempel di baris shift --
+          bukan di shift_amendments, yang RLS-nya hanya membuka baris milik
+          penulisnya sendiri, yaitu owner. */}
+      {shift.rejected_at && (
+        <div className="flex flex-wrap items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 backdrop-blur-sm">
+          <Undo2 className="mt-0.5 size-4 shrink-0 text-destructive" />
+          <div className="min-w-[16rem] flex-1 text-xs">
+            <p className="font-semibold text-destructive">
+              Laporan penutupan shift ini ditolak owner —{" "}
+              {new Date(shift.rejected_at).toLocaleString("id-ID")}
+            </p>
+            {shift.rejection_reason && (
+              <p className="mt-1 italic text-muted-foreground">“{shift.rejection_reason}”</p>
+            )}
+            <p className="mt-1 text-muted-foreground">
+              Shift terbuka lagi dengan modal awal yang sama. Perbaiki angka penutupannya di Tutup
+              Shift — isian lama Anda sudah dimuat di sana.
+            </p>
+          </div>
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="border-destructive/40 text-destructive hover:bg-destructive/10"
+          >
+            <Link to="/close-shift">Perbaiki laporan</Link>
+          </Button>
+        </div>
+      )}
 
       {opening.isError && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm backdrop-blur-sm">
