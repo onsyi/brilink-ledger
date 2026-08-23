@@ -499,7 +499,7 @@ function Reports() {
           </p>
         ) : (
           <div className="overflow-x-auto hide-scrollbar">
-            <table className="w-full min-w-[900px] text-sm">
+            <table className="w-full min-w-[1040px] text-sm">
               <thead>
                 <tr className="border-b border-border/60 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
                   <th className="pb-3">Shift & Mulai</th>
@@ -508,6 +508,7 @@ function Reports() {
                   <th className="pb-3 text-right">Modal Awal</th>
                   <th className="pb-3 text-right">Saldo Fisik</th>
                   <th className="pb-3 text-right">Pengeluaran</th>
+                  <th className="pb-3">Keterangan</th>
                   <th className="pb-3 text-right">Setoran</th>
                   <th className="pb-3 text-right">Modal Tambahan</th>
                   <th className="pb-3 text-right">Settlement</th>
@@ -557,6 +558,18 @@ function Reports() {
                     </td>
                     <td className="py-3.5 text-right text-destructive">
                       {rupiah(r.shift.total_expenses)}
+                    </td>
+                    <td className="max-w-[220px] py-3.5 align-middle">
+                      {r.shift.expense_notes ? (
+                        <span
+                          title={r.shift.expense_notes}
+                          className="block truncate text-xs italic text-muted-foreground"
+                        >
+                          {r.shift.expense_notes}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td className="py-3.5 text-right font-medium">
                       <span className={r.shift.deposit_confirmed ? "text-success" : "text-cash"}>

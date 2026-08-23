@@ -38,7 +38,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       let query = supabase
         .from("shifts")
         .select(
-          "id, user_id, start_time, initial_physical_balance, final_physical_balance, total_expenses, topup_request, settlement_amount, status, branch_id, modal_awal, modal_akhir, additional_capital",
+          "id, user_id, start_time, initial_physical_balance, final_physical_balance, total_expenses, expense_notes, topup_request, settlement_amount, status, branch_id, modal_awal, modal_akhir, additional_capital",
         )
         .order("start_time", { ascending: false })
         .limit(60);
@@ -244,7 +244,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       <section className="glass-card p-5 sm:p-6">
         <h2 className="text-lg font-bold">Riwayat shift terakhir</h2>
         <div className="mt-4 overflow-x-auto hide-scrollbar">
-          <table className="w-full min-w-[500px] text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-border/60">
                 <th className="pb-3 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
@@ -255,6 +255,9 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                 </th>
                 <th className="pb-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
                   Transaksi
+                </th>
+                <th className="pb-3 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                  Pengeluaran
                 </th>
                 <th className="pb-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
                   Laba
@@ -275,7 +278,20 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                     {new Date(r.shift.start_time).toLocaleDateString("id-ID")}
                   </td>
                   <td className="py-3 text-right">{r.txnCount}</td>
-                  <td className="py-3 text-right font-semibold text-success">
+                  <td className="max-w-[220px] py-3 text-left align-top">
+                    <span className={num(r.shift.total_expenses) > 0 ? "text-destructive" : ""}>
+                      {rupiah(r.shift.total_expenses)}
+                    </span>
+                    {r.shift.expense_notes ? (
+                      <span
+                        title={r.shift.expense_notes}
+                        className="mt-0.5 block truncate text-[11px] italic text-muted-foreground"
+                      >
+                        {r.shift.expense_notes}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="py-3 text-right align-top font-semibold text-success">
                     {r.labaFee !== null ? rupiah(r.labaFee) : "—"}
                   </td>
                   <td className="py-3 text-right">
@@ -293,7 +309,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
               ))}
               {(d?.rows ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={6} className="py-6 text-center text-muted-foreground">
                     Belum ada shift tercatat.
                   </td>
                 </tr>

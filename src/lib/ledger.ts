@@ -1,6 +1,10 @@
 export const BANKS = [
   "BRI D",
   "BRI Y",
+  // Saldo BRILink itu sendiri. Duduk di sisi bank, bukan PPOB, karena fee
+  // transaksi BRILink mendarat di sini -- labaFee() menjumlah saldo bank, jadi
+  // menaruhnya di PPOB akan membuat fee yang diterima hilang dari laba.
+  "Link",
   "Mandiri",
   "BCA",
   "PAPUA",
