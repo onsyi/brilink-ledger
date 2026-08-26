@@ -163,13 +163,54 @@ export function labaFee(opts: {
 /**
  * Pemakaian PPOB — kept entirely separate from the BRILink books.
  *
- *   (Saldo Akhir PPOB 1 + PPOB 2 + …) - (Saldo Awal PPOB 1 + PPOB 2 + …)
+ *   (Saldo Awal PPOB 1 + PPOB 2 + …) + Penambahan Saldo
+ *   - (Saldo Akhir PPOB 1 + PPOB 2 + …)
  *
- * Note this is closing minus opening, so consuming balance yields a negative
- * figure and topping up yields a positive one.
+ * Positive when balance was consumed during the shift, negative when the float
+ * grew. `topup` is `shifts.topup_request` — the single shift-level "Penambahan
+ * saldo PPOB" from the closing form. It has to be added back, otherwise a
+ * mid-shift top-up reads as if the cashier *earned* PPOB balance rather than
+ * spending it: open 1.000.000, top up 500.000, consume 300.000, close at
+ * 1.200.000 used to report +200.000 instead of the 300.000 actually used.
+ *
+ * Callers must gate on `shifts.modal_akhir === null` first. An open shift has
+ * `final_amount = 0` on every `ppob_balances` row (NOT NULL DEFAULT 0), so this
+ * would report the whole opening float as consumed.
  */
-export function ppobTerpakai(opts: { ppobInitials: number[]; ppobFinals: number[] }) {
+export function ppobTerpakai(opts: {
+  ppobInitials: number[];
+  ppobFinals: number[];
+  topup: number;
+}) {
   const initialTotal = opts.ppobInitials.reduce((s, n) => s + n, 0);
   const finalTotal = opts.ppobFinals.reduce((s, n) => s + n, 0);
-  return finalTotal - initialTotal;
+  return initialTotal + opts.topup - finalTotal;
+}
+
+/**
+ * Porsi setoran kasir yang dihitung sebagai FS. Hardcoded — bukan setting per
+ * cabang; ubah di sini kalau kesepakatan bagi hasilnya berubah.
+ */
+export const FS_RATE = 0.15;
+
+/**
+ * FBI = Laba Fee - PPOB Terpakai.
+ *
+ * `ppobUsed` harus memakai konvensi {@link ppobTerpakai} (positif = saldo PPOB
+ * terpakai), sehingga pemakaian saldo mengurangi FBI. Argumennya objek, bukan
+ * posisional, supaya kedua operan pengurangan tidak bisa tertukar diam-diam.
+ */
+export function fbi(opts: { laba: number; ppobUsed: number }) {
+  return opts.laba - opts.ppobUsed;
+}
+
+/**
+ * FS = Setoran Kasir x {@link FS_RATE}, dibulatkan ke rupiah penuh.
+ *
+ * Pembulatan disengaja: {@link rupiah} merender `maximumFractionDigits: 0`, jadi
+ * tanpa ini baris total (jumlah nilai eksak) bisa meleset beberapa rupiah dari
+ * hasil menjumlahkan angka yang tampil di layar.
+ */
+export function fsSetoran(deposit: number) {
+  return Math.round(deposit * FS_RATE);
 }
