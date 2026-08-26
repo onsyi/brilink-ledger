@@ -19,7 +19,16 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { BANKS, labaFee, num, PPOB_PROVIDERS, ppobTerpakai, rupiah } from "@/lib/ledger";
+import {
+  BANKS,
+  fbi,
+  fsSetoran,
+  labaFee,
+  num,
+  PPOB_PROVIDERS,
+  ppobTerpakai,
+  rupiah,
+} from "@/lib/ledger";
 import { cn } from "@/lib/utils";
 import { QueryError } from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
@@ -168,9 +177,10 @@ function Reports() {
       (txns ?? []).forEach((t) => {
         txnCountByShift.set(t.shift_id, (txnCountByShift.get(t.shift_id) ?? 0) + 1);
       });
-      // PPOB dibukukan terpisah dari BRILink. Penambahan saldo kini satu angka
-      // di level shift (topup_request); kolom per-provider
-      // ppob_balances.topup_amount tidak lagi diisi form penutupan.
+      // PPOB dibukukan terpisah dari BRILink. Penambahan saldo adalah satu angka
+      // di level shift (shifts.topup_request) dan ikut masuk ke ppobTerpakai()
+      // di bawah; kolom per-provider ppob_balances.topup_amount tidak lagi diisi
+      // form penutupan (selalu 0) dan tidak dipakai di sini.
       const ppobInitialsByShift = new Map<string, number[]>();
       const ppobFinalsByShift = new Map<string, number[]>();
       (ppobRows ?? []).forEach((p) => {
@@ -195,28 +205,45 @@ function Reports() {
           (bankFinalsByShift.get(b.shift_id) ?? 0) + num(b.final_amount),
         );
       });
-      const rows = (shiftRows ?? []).map((s) => ({
-        shift: s,
-        txnCount: txnCountByShift.get(s.id) ?? 0,
-        ppobUsed: ppobTerpakai({
-          ppobInitials: ppobInitialsByShift.get(s.id) ?? [],
-          ppobFinals: ppobFinalsByShift.get(s.id) ?? [],
-        }),
-        laba:
-          s.modal_akhir === null
-            ? null
-            : labaFee({
-                initialPhysical: num(s.initial_physical_balance),
-                finalPhysical: num(s.final_physical_balance),
-                bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
-                bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
-                expenses: num(s.total_expenses),
-                settlement: num(s.settlement_amount),
-                additionalCapital: num(s.additional_capital),
-              }),
-        cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
-        branchName: (s.branch_id && branchNameOf.get(s.branch_id)) || "—",
-      }));
+      const rows = (shiftRows ?? []).map((s) => {
+        const ppobInitials = ppobInitialsByShift.get(s.id) ?? [];
+        const ppobFinals = ppobFinalsByShift.get(s.id) ?? [];
+        // Shift yang masih terbuka — termasuk yang laporannya ditolak owner —
+        // punya final_amount = 0 di semua baris ppob_balances dan topup_request
+        // = 0, jadi angka apa pun yang dihitung di sini omong kosong. Digate
+        // sama seperti Laba Fee & Modal Akhir: modal_akhir NULL ⇒ tampilkan "—".
+        const closed = s.modal_akhir !== null;
+        const ppobUsed = closed
+          ? ppobTerpakai({ ppobInitials, ppobFinals, topup: num(s.topup_request) })
+          : null;
+        const laba = closed
+          ? labaFee({
+              initialPhysical: num(s.initial_physical_balance),
+              finalPhysical: num(s.final_physical_balance),
+              bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
+              bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
+              expenses: num(s.total_expenses),
+              settlement: num(s.settlement_amount),
+              additionalCapital: num(s.additional_capital),
+            })
+          : null;
+        return {
+          shift: s,
+          txnCount: txnCountByShift.get(s.id) ?? 0,
+          ppobUsed,
+          // Rincian untuk tooltip kolom PPOB Terpakai — topup_request tidak
+          // dirender di mana pun, jadi tanpa ini angkanya tidak bisa diaudit.
+          ppobInitial: ppobInitials.reduce((a, b) => a + b, 0),
+          ppobFinal: ppobFinals.reduce((a, b) => a + b, 0),
+          laba,
+          fbi: laba === null || ppobUsed === null ? null : fbi({ laba, ppobUsed }),
+          // FS memakai deposit_amount mentah, termasuk setoran yang belum
+          // dikonfirmasi owner.
+          fs: fsSetoran(num(s.deposit_amount)),
+          cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
+          branchName: (s.branch_id && branchNameOf.get(s.branch_id)) || "—",
+        };
+      });
       return { rows, matched, truncated: matched > rows.length };
     },
   });
@@ -285,6 +312,12 @@ function Reports() {
   const truncated = shifts.data?.truncated ?? false;
   const totalLaba = rows.reduce((s, r) => s + (r.laba ?? 0), 0);
   const totalDeposit = rows.reduce((s, r) => s + num(r.shift.deposit_amount), 0);
+  // Dijumlah sendiri-sendiri, bukan totalLaba - totalPpobUsed: keduanya memang
+  // sama karena digate baris yang persis sama, tapi reduce terpisah tetap benar
+  // kalau gate-nya nanti berbeda.
+  const totalPpobUsed = rows.reduce((s, r) => s + (r.ppobUsed ?? 0), 0);
+  const totalFbi = rows.reduce((s, r) => s + (r.fbi ?? 0), 0);
+  const totalFs = rows.reduce((s, r) => s + r.fs, 0);
 
   const periodStats = useMemo(() => {
     return {
@@ -513,7 +546,7 @@ function Reports() {
           </p>
         ) : (
           <div className="overflow-x-auto hide-scrollbar">
-            <table className="w-full min-w-[1040px] text-sm">
+            <table className="w-full min-w-[1260px] text-sm">
               <thead>
                 <tr className="border-b border-border/60 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
                   <th className="pb-3">Shift & Mulai</th>
@@ -529,6 +562,12 @@ function Reports() {
                   <th className="pb-3 text-right">PPOB Terpakai</th>
                   <th className="pb-3 text-right">Modal Akhir</th>
                   <th className="pb-3 text-right">Laba Fee</th>
+                  <th className="pb-3 text-right" title="Laba Fee − PPOB Terpakai">
+                    FBI
+                  </th>
+                  <th className="pb-3 text-right" title="15% dari setoran kasir">
+                    FS
+                  </th>
                   <th className="pb-3 text-center">Status</th>
                   {isOwner && <th className="pb-3 text-center">Tindakan</th>}
                 </tr>
@@ -607,8 +646,16 @@ function Reports() {
                     </td>
                     <td className="py-3.5 text-right">{rupiah(r.shift.additional_capital)}</td>
                     <td className="py-3.5 text-right">{rupiah(r.shift.settlement_amount)}</td>
-                    <td className="py-3.5 text-right font-medium text-accent">
-                      {rupiah(r.ppobUsed)}
+                    <td
+                      className="py-3.5 text-right font-medium text-accent"
+                      title={
+                        r.ppobUsed !== null
+                          ? `Saldo awal ${rupiah(r.ppobInitial)} + penambahan ` +
+                            `${rupiah(r.shift.topup_request)} − saldo akhir ${rupiah(r.ppobFinal)}`
+                          : "Shift belum ditutup"
+                      }
+                    >
+                      {r.ppobUsed !== null ? rupiah(r.ppobUsed) : "—"}
                     </td>
                     <td className="py-3.5 text-right font-bold text-success">
                       {r.shift.modal_akhir !== null ? rupiah(r.shift.modal_akhir) : "—"}
@@ -616,6 +663,18 @@ function Reports() {
                     <td className="py-3.5 text-right font-bold text-success">
                       {r.laba !== null ? rupiah(r.laba) : "—"}
                     </td>
+                    {/* FBI memang bisa negatif kalau pemakaian saldo PPOB
+                        melebihi laba fee — itu justru inti kolom ini. */}
+                    <td className="py-3.5 text-right font-bold">
+                      {r.fbi !== null ? (
+                        <span className={r.fbi < 0 ? "text-destructive" : "text-success"}>
+                          {rupiah(r.fbi)}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="py-3.5 text-right font-medium text-cash">{rupiah(r.fs)}</td>
                     <td className="py-3.5 text-center">
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
@@ -668,6 +727,35 @@ function Reports() {
                   </tr>
                 ))}
               </tbody>
+              {/* Total periode. Menjumlah baris yang termuat saja — lihat
+                  peringatan truncation di atas. Shift terbuka menyumbang 0
+                  karena angkanya "—". `num` ada di <tbody>, tidak diwariskan ke
+                  <tfoot>, jadi harus diulang agar digit total sejajar. */}
+              <tfoot className="num">
+                <tr className="border-t-2 border-border/60 text-sm font-bold">
+                  <td
+                    className="py-3.5 text-xs font-bold tracking-widest text-muted-foreground uppercase"
+                    colSpan={7}
+                  >
+                    Total {rows.length} shift
+                  </td>
+                  <td className="py-3.5 text-right text-cash">{rupiah(totalDeposit)}</td>
+                  <td colSpan={2} />
+                  <td className="py-3.5 text-right text-accent">{rupiah(totalPpobUsed)}</td>
+                  <td />
+                  <td className="py-3.5 text-right text-success">{rupiah(totalLaba)}</td>
+                  <td
+                    className={cn(
+                      "py-3.5 text-right",
+                      totalFbi < 0 ? "text-destructive" : "text-success",
+                    )}
+                  >
+                    {rupiah(totalFbi)}
+                  </td>
+                  <td className="py-3.5 text-right text-cash">{rupiah(totalFs)}</td>
+                  <td colSpan={isOwner ? 2 : 1} />
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}
