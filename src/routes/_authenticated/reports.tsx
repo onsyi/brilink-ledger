@@ -220,8 +220,11 @@ function Reports() {
           ? labaFee({
               initialPhysical: num(s.initial_physical_balance),
               finalPhysical: num(s.final_physical_balance),
+              deposit: num(s.deposit_amount),
               bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
               bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
+              ppobInitials,
+              ppobFinals,
               expenses: num(s.total_expenses),
               settlement: num(s.settlement_amount),
               additionalCapital: num(s.additional_capital),
@@ -236,10 +239,9 @@ function Reports() {
           ppobInitial: ppobInitials.reduce((a, b) => a + b, 0),
           ppobFinal: ppobFinals.reduce((a, b) => a + b, 0),
           laba,
-          fbi: laba === null || ppobUsed === null ? null : fbi({ laba, ppobUsed }),
-          // FS memakai deposit_amount mentah, termasuk setoran yang belum
-          // dikonfirmasi owner.
-          fs: fsSetoran(num(s.deposit_amount)),
+          fbi: laba,
+          // FS dihitung 15% dari Laba Fee (keuntungan jasa), bukan dari nominal setoran pokok
+          fs: laba !== null && laba > 0 ? fsSetoran(laba) : 0,
           cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
           branchName: (s.branch_id && branchNameOf.get(s.branch_id)) || "—",
         };
@@ -562,10 +564,10 @@ function Reports() {
                   <th className="pb-3 text-right">PPOB Terpakai</th>
                   <th className="pb-3 text-right">Modal Akhir</th>
                   <th className="pb-3 text-right">Laba Fee</th>
-                  <th className="pb-3 text-right" title="Laba Fee − PPOB Terpakai">
+                  <th className="pb-3 text-right" title="Fee Based Income (Laba Bersih Shift)">
                     FBI
                   </th>
-                  <th className="pb-3 text-right" title="15% dari setoran kasir">
+                  <th className="pb-3 text-right" title="15% dari Laba Fee (bagi hasil kasir)">
                     FS
                   </th>
                   <th className="pb-3 text-center">Status</th>

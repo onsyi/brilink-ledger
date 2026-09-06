@@ -53,7 +53,7 @@ export function cashDelta(t: LedgerTxn) {
   if (t.transaction_type === "tarik_tunai") return -principal + fee;
   if (t.transaction_type === "setor_tunai") return principal + fee;
   if (t.source_account === "kas_fisik" && t.destination_account !== "kas_fisik")
-    return principal + fee;
+    return -principal + fee;
   if (t.destination_account === "kas_fisik") return principal + fee;
   return fee;
 }
@@ -113,69 +113,73 @@ export function modalAwal(opts: {
 }
 
 /**
- * Modal akhir (gross closing capital): final physical cash + final bank/PPOB balances.
- * Laba/rugi shift dihitung dengan modalAkhir - modalAwal.
+ * Modal akhir (gross closing capital): final physical cash + deposit to owner + final bank/PPOB balances.
+ * Nilai kotor seluruh aset shift sebelum/sesudah penyerahan setoran.
  */
 export function modalAkhir(opts: {
   finalPhysical: number;
+  deposit?: number;
   bankFinals: number[];
   ppobFinals: number[];
 }) {
   return (
     opts.finalPhysical +
+    (opts.deposit ?? 0) +
     opts.bankFinals.reduce((s, n) => s + n, 0) +
     opts.ppobFinals.reduce((s, n) => s + n, 0)
   );
 }
 
 /**
- * Fee BRILink — the BRILink side only: physical cash and bank accounts.
+ * Laba Bersih Shift / Fee Based Income (FBI) — mencakup seluruh akun:
+ * kas fisik di laci, setoran ke owner, rekening bank, dan saldo PPOB.
  *
- *   (Saldo Tunai Akhir + Saldo Akhir Total Bank + Pengeluaran + Settlement)
- *   - (Saldo Tunai Awal + Saldo Awal Total Bank + Modal Tambahan)
+ *   (Saldo Tunai Akhir + Setoran ke Owner + Saldo Akhir Total Bank + Saldo Akhir Total PPOB + Pengeluaran + Settlement)
+ *   - (Saldo Tunai Awal + Saldo Awal Total Bank + Saldo Awal Total PPOB + Modal Tambahan)
  *
- * Modal tambahan is subtracted because capital injected mid-shift raises the
- * closing balances without being earned.
- *
- * PPOB is deliberately absent — it keeps its own ledger via
- * {@link ppobTerpakai}.
+ * Mengapa komponen ini dimasukkan:
+ * - Setoran ke owner ditambahkan karena uang fisik diserahkan ke owner sebelum sisa laci dihitung.
+ * - Pengeluaran operasional ditambahkan kembali agar laba kotor fee tidak berkurang oleh biaya operasional toko.
+ * - Settlement ditambahkan sebagai pendapatan fee/batch settlement EDC.
+ * - Modal tambahan dikurangkan karena merupakan suntikan modal mid-shift, bukan pendapatan fee.
+ * - Bank dan PPOB disatukan agar perpindahan dana antar-akun (seperti top-up PPOB via bank) tidak terpotong dua kali.
  */
 export function labaFee(opts: {
   initialPhysical: number;
   finalPhysical: number;
+  deposit?: number;
   bankInitials: number[];
   bankFinals: number[];
+  ppobInitials?: number[];
+  ppobFinals?: number[];
   expenses: number;
   settlement: number;
   additionalCapital: number;
 }) {
   const bankInitialTotal = opts.bankInitials.reduce((s, n) => s + n, 0);
   const bankFinalTotal = opts.bankFinals.reduce((s, n) => s + n, 0);
+  const ppobInitialTotal = (opts.ppobInitials ?? []).reduce((s, n) => s + n, 0);
+  const ppobFinalTotal = (opts.ppobFinals ?? []).reduce((s, n) => s + n, 0);
+  const deposit = opts.deposit ?? 0;
+
   return (
     opts.finalPhysical +
+    deposit +
     bankFinalTotal +
+    ppobFinalTotal +
     opts.expenses +
     opts.settlement -
-    (opts.initialPhysical + bankInitialTotal + opts.additionalCapital)
+    (opts.initialPhysical + bankInitialTotal + ppobInitialTotal + opts.additionalCapital)
   );
 }
 
 /**
- * Pemakaian PPOB — kept entirely separate from the BRILink books.
+ * Pemakaian PPOB — volume saldo PPOB yang terpakai selama shift.
  *
  *   (Saldo Awal PPOB 1 + PPOB 2 + …) + Penambahan Saldo
  *   - (Saldo Akhir PPOB 1 + PPOB 2 + …)
  *
- * Positive when balance was consumed during the shift, negative when the float
- * grew. `topup` is `shifts.topup_request` — the single shift-level "Penambahan
- * saldo PPOB" from the closing form. It has to be added back, otherwise a
- * mid-shift top-up reads as if the cashier *earned* PPOB balance rather than
- * spending it: open 1.000.000, top up 500.000, consume 300.000, close at
- * 1.200.000 used to report +200.000 instead of the 300.000 actually used.
- *
- * Callers must gate on `shifts.modal_akhir === null` first. An open shift has
- * `final_amount = 0` on every `ppob_balances` row (NOT NULL DEFAULT 0), so this
- * would report the whole opening float as consumed.
+ * Bernilai positif saat saldo terpakai untuk transaksi pelanggan.
  */
 export function ppobTerpakai(opts: {
   ppobInitials: number[];
@@ -188,29 +192,24 @@ export function ppobTerpakai(opts: {
 }
 
 /**
- * Porsi setoran kasir yang dihitung sebagai FS. Hardcoded — bukan setting per
- * cabang; ubah di sini kalau kesepakatan bagi hasilnya berubah.
+ * Porsi bagi hasil kasir (Fee Sharing / FS).
+ * Dihitung sebesar 15% dari keuntungan fee (Laba Fee / FBI), bukan dari uang pokok setoran.
  */
 export const FS_RATE = 0.15;
 
 /**
- * FBI = Laba Fee - PPOB Terpakai.
- *
- * `ppobUsed` harus memakai konvensi {@link ppobTerpakai} (positif = saldo PPOB
- * terpakai), sehingga pemakaian saldo mengurangi FBI. Argumennya objek, bukan
- * posisional, supaya kedua operan pengurangan tidak bisa tertukar diam-diam.
+ * FBI = Fee Based Income (Laba Bersih Fee).
+ * Pada model terpadu, labaFee telah merefleksikan seluruh fee (perbankan & PPOB).
  */
-export function fbi(opts: { laba: number; ppobUsed: number }) {
-  return opts.laba - opts.ppobUsed;
+export function fbi(opts: { laba: number; ppobUsed?: number }) {
+  return opts.laba;
 }
 
 /**
- * FS = Setoran Kasir x {@link FS_RATE}, dibulatkan ke rupiah penuh.
- *
- * Pembulatan disengaja: {@link rupiah} merender `maximumFractionDigits: 0`, jadi
- * tanpa ini baris total (jumlah nilai eksak) bisa meleset beberapa rupiah dari
- * hasil menjumlahkan angka yang tampil di layar.
+ * FS = Fee Sharing kasir x {@link FS_RATE}, dibulatkan ke rupiah penuh.
+ * Hanya dihitung bila laba positif (> 0).
  */
-export function fsSetoran(deposit: number) {
-  return Math.round(deposit * FS_RATE);
+export function fsSetoran(profitOrFee: number, rate = FS_RATE) {
+  if (profitOrFee <= 0) return 0;
+  return Math.round(profitOrFee * rate);
 }

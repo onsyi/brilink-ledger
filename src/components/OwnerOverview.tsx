@@ -39,7 +39,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       let query = supabase
         .from("shifts")
         .select(
-          "id, user_id, start_time, initial_physical_balance, final_physical_balance, total_expenses, expense_notes, topup_request, settlement_amount, status, branch_id, modal_awal, modal_akhir, additional_capital, rejected_at, rejection_reason",
+          "id, user_id, start_time, end_time, initial_physical_balance, final_physical_balance, total_expenses, expense_notes, deposit_amount, topup_request, settlement_amount, status, branch_id, modal_awal, modal_akhir, additional_capital, rejected_at, rejection_reason",
         )
         .order("start_time", { ascending: false })
         .limit(60);
@@ -49,18 +49,25 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       const { data: shifts, error } = await query;
       if (error) throw error;
       const ids = (shifts ?? []).map((s) => s.id);
-      const [{ data: txns }, { data: profiles }, { data: bankRows }] = await Promise.all([
-        ids.length
-          ? supabase.from("transactions").select("shift_id").in("shift_id", ids)
-          : Promise.resolve({ data: [] as never[] }),
-        supabase.from("profiles").select("id, username"),
-        ids.length
-          ? supabase
-              .from("bank_balances")
-              .select("shift_id, initial_amount, final_amount")
-              .in("shift_id", ids)
-          : Promise.resolve({ data: [] as never[] }),
-      ]);
+      const [{ data: txns }, { data: profiles }, { data: bankRows }, { data: ppobRows }] =
+        await Promise.all([
+          ids.length
+            ? supabase.from("transactions").select("shift_id").in("shift_id", ids)
+            : Promise.resolve({ data: [] as never[] }),
+          supabase.from("profiles").select("id, username"),
+          ids.length
+            ? supabase
+                .from("bank_balances")
+                .select("shift_id, initial_amount, final_amount")
+                .in("shift_id", ids)
+            : Promise.resolve({ data: [] as never[] }),
+          ids.length
+            ? supabase
+                .from("ppob_balances")
+                .select("shift_id, initial_amount, final_amount")
+                .in("shift_id", ids)
+            : Promise.resolve({ data: [] as never[] }),
+        ]);
       const nameOf = (id: string) => (profiles ?? []).find((p) => p.id === id)?.username ?? "kasir";
       const txnCountByShift = new Map<string, number>();
       (txns ?? []).forEach((t) => {
@@ -78,6 +85,18 @@ export function OwnerOverview({ username }: { username?: string | null }) {
           (bankFinalsByShift.get(b.shift_id) ?? 0) + num(b.final_amount),
         );
       });
+      const ppobInitialsByShift = new Map<string, number>();
+      const ppobFinalsByShift = new Map<string, number>();
+      (ppobRows ?? []).forEach((p) => {
+        ppobInitialsByShift.set(
+          p.shift_id,
+          (ppobInitialsByShift.get(p.shift_id) ?? 0) + num(p.initial_amount),
+        );
+        ppobFinalsByShift.set(
+          p.shift_id,
+          (ppobFinalsByShift.get(p.shift_id) ?? 0) + num(p.final_amount),
+        );
+      });
       const rows = (shifts ?? []).map((s) => ({
         shift: s,
         txnCount: txnCountByShift.get(s.id) ?? 0,
@@ -88,22 +107,32 @@ export function OwnerOverview({ username }: { username?: string | null }) {
             : labaFee({
                 initialPhysical: num(s.initial_physical_balance),
                 finalPhysical: num(s.final_physical_balance),
+                deposit: num(s.deposit_amount),
                 bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
                 bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
+                ppobInitials: [ppobInitialsByShift.get(s.id) ?? 0],
+                ppobFinals: [ppobFinalsByShift.get(s.id) ?? 0],
                 expenses: num(s.total_expenses),
                 settlement: num(s.settlement_amount),
                 additionalCapital: num(s.additional_capital),
               }),
       }));
-      const today = new Date().toLocaleDateString("id-ID");
+      const isToday = (dateStr?: string | null) => {
+        if (!dateStr) return false;
+        const d = new Date(dateStr);
+        const now = new Date();
+        return (
+          d.getFullYear() === now.getFullYear() &&
+          d.getMonth() === now.getMonth() &&
+          d.getDate() === now.getDate()
+        );
+      };
       return {
         rows,
         open: rows.filter((r) => r.shift.status === "open"),
         profitToday: rows
           .filter(
-            (r) =>
-              r.shift.status === "closed" &&
-              new Date(r.shift.start_time).toLocaleDateString("id-ID") === today,
+            (r) => r.shift.status === "closed" && isToday(r.shift.end_time ?? r.shift.start_time),
           )
           .reduce((s, r) => s + (r.labaFee ?? 0), 0),
         cashiers: new Set(rows.map((r) => r.shift.user_id)).size,
