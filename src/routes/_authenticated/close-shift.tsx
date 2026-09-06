@@ -265,7 +265,12 @@ function CloseShift() {
             value={expenses}
             onChange={setExpenses}
           />
-          <MoneyInput id="deposit" label="Setoran ke owner" value={deposit} onChange={setDeposit} />
+          <MoneyInput
+            id="deposit"
+            label="Setoran kasir (jual beli barang / ke owner)"
+            value={deposit}
+            onChange={setDeposit}
+          />
           <MoneyInput
             id="settlement"
             label="Settlement (setel saldo)"

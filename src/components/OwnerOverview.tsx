@@ -107,11 +107,8 @@ export function OwnerOverview({ username }: { username?: string | null }) {
             : labaFee({
                 initialPhysical: num(s.initial_physical_balance),
                 finalPhysical: num(s.final_physical_balance),
-                deposit: num(s.deposit_amount),
                 bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
                 bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
-                ppobInitials: [ppobInitialsByShift.get(s.id) ?? 0],
-                ppobFinals: [ppobFinalsByShift.get(s.id) ?? 0],
                 expenses: num(s.total_expenses),
                 settlement: num(s.settlement_amount),
                 additionalCapital: num(s.additional_capital),

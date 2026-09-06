@@ -113,63 +113,47 @@ export function modalAwal(opts: {
 }
 
 /**
- * Modal akhir (gross closing capital): final physical cash + deposit to owner + final bank/PPOB balances.
- * Nilai kotor seluruh aset shift sebelum/sesudah penyerahan setoran.
+ * Modal akhir (gross closing capital): final physical cash + final bank/PPOB balances.
+ * Laba/rugi shift dihitung dengan modalAkhir - modalAwal.
  */
 export function modalAkhir(opts: {
   finalPhysical: number;
-  deposit?: number;
   bankFinals: number[];
   ppobFinals: number[];
 }) {
   return (
     opts.finalPhysical +
-    (opts.deposit ?? 0) +
     opts.bankFinals.reduce((s, n) => s + n, 0) +
     opts.ppobFinals.reduce((s, n) => s + n, 0)
   );
 }
 
 /**
- * Laba Bersih Shift / Fee Based Income (FBI) — mencakup seluruh akun:
- * kas fisik di laci, setoran ke owner, rekening bank, dan saldo PPOB.
+ * Fee BRILink — the BRILink side only: physical cash and bank accounts.
  *
- *   (Saldo Tunai Akhir + Setoran ke Owner + Saldo Akhir Total Bank + Saldo Akhir Total PPOB + Pengeluaran + Settlement)
- *   - (Saldo Tunai Awal + Saldo Awal Total Bank + Saldo Awal Total PPOB + Modal Tambahan)
+ *   (Saldo Tunai Akhir + Saldo Akhir Total Bank + Pengeluaran + Settlement)
+ *   - (Saldo Tunai Awal + Saldo Awal Total Bank + Modal Tambahan)
  *
- * Mengapa komponen ini dimasukkan:
- * - Setoran ke owner ditambahkan karena uang fisik diserahkan ke owner sebelum sisa laci dihitung.
- * - Pengeluaran operasional ditambahkan kembali agar laba kotor fee tidak berkurang oleh biaya operasional toko.
- * - Settlement ditambahkan sebagai pendapatan fee/batch settlement EDC.
- * - Modal tambahan dikurangkan karena merupakan suntikan modal mid-shift, bukan pendapatan fee.
- * - Bank dan PPOB disatukan agar perpindahan dana antar-akun (seperti top-up PPOB via bank) tidak terpotong dua kali.
+ * Modal tambahan dikurangkan karena merupakan suntikan modal mid-shift.
+ * PPOB dicatat terpisah via {@link ppobTerpakai}.
  */
 export function labaFee(opts: {
   initialPhysical: number;
   finalPhysical: number;
-  deposit?: number;
   bankInitials: number[];
   bankFinals: number[];
-  ppobInitials?: number[];
-  ppobFinals?: number[];
   expenses: number;
   settlement: number;
   additionalCapital: number;
 }) {
   const bankInitialTotal = opts.bankInitials.reduce((s, n) => s + n, 0);
   const bankFinalTotal = opts.bankFinals.reduce((s, n) => s + n, 0);
-  const ppobInitialTotal = (opts.ppobInitials ?? []).reduce((s, n) => s + n, 0);
-  const ppobFinalTotal = (opts.ppobFinals ?? []).reduce((s, n) => s + n, 0);
-  const deposit = opts.deposit ?? 0;
-
   return (
     opts.finalPhysical +
-    deposit +
     bankFinalTotal +
-    ppobFinalTotal +
     opts.expenses +
     opts.settlement -
-    (opts.initialPhysical + bankInitialTotal + ppobInitialTotal + opts.additionalCapital)
+    (opts.initialPhysical + bankInitialTotal + opts.additionalCapital)
   );
 }
 
@@ -192,24 +176,22 @@ export function ppobTerpakai(opts: {
 }
 
 /**
- * Porsi bagi hasil kasir (Fee Sharing / FS).
- * Dihitung sebesar 15% dari keuntungan fee (Laba Fee / FBI), bukan dari uang pokok setoran.
+ * Porsi setoran kasir yang dihitung sebagai FS (15%).
  */
 export const FS_RATE = 0.15;
 
 /**
- * FBI = Fee Based Income (Laba Bersih Fee).
- * Pada model terpadu, labaFee telah merefleksikan seluruh fee (perbankan & PPOB).
+ * Rumus FBI = Laba Fee - PPOB terpakai.
  */
-export function fbi(opts: { laba: number; ppobUsed?: number }) {
-  return opts.laba;
+export function fbi(opts: { laba: number; ppobUsed: number }) {
+  return opts.laba - opts.ppobUsed;
 }
 
 /**
- * FS = Fee Sharing kasir x {@link FS_RATE}, dibulatkan ke rupiah penuh.
- * Hanya dihitung bila laba positif (> 0).
+ * Rumus FS = Setoran x 15%, dibulatkan ke rupiah penuh.
+ * Kasir yang tidak mengisi setoran kasir (setoran = 0) menghasilkan FS = 0.
  */
-export function fsSetoran(profitOrFee: number, rate = FS_RATE) {
-  if (profitOrFee <= 0) return 0;
-  return Math.round(profitOrFee * rate);
+export function fsSetoran(deposit: number, rate = FS_RATE) {
+  if (deposit <= 0) return 0;
+  return Math.round(deposit * rate);
 }
