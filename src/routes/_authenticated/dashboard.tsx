@@ -291,11 +291,11 @@ function OpenShiftPanel({
 
           <div className="space-y-2 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Kas fisik + Bank</span>
+              <span className="text-sm text-muted-foreground">Saldo Awal (Kas fisik + Bank)</span>
               <span className="num text-sm font-semibold">{rupiah(fisikBankTotal)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Saldo PPOB</span>
+              <span className="text-sm text-muted-foreground">Saldo PPOB (Berdiri sendiri)</span>
               <span className="num text-sm font-semibold">{rupiah(ppobInitialsTotal)}</span>
             </div>
           </div>

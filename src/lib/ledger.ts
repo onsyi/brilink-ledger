@@ -100,50 +100,87 @@ export function summarize(txns: LedgerTxn[]): ShiftSummary {
 }
 
 /**
- * Modal awal (opening capital): physical cash + opening balances of every
- * bank & PPOB account.
+ * Rumus Saldo Awal:
+ * Saldo semua rekening shift sebelumnya + Saldo Awal Buka Kasir + Penambahan Modal
+ * Tidak bisa ditambahkan dengan PPOB karena masing-masing berdiri sendiri.
+ */
+export function saldoAwal(opts: {
+  initialPhysical: number;
+  bankInitials: number[];
+  additionalCapital?: number;
+}) {
+  const bankTotal = opts.bankInitials.reduce((s, n) => s + num(n), 0);
+  return num(opts.initialPhysical) + bankTotal + num(opts.additionalCapital);
+}
+
+/**
+ * Rumus Saldo Akhir:
+ * Saldo uang Fisik tutup kasir + Saldo rekening Bank tutup kasir + settlement + Pengeluaran
+ * Tidak bisa ditambahkan dengan PPOB karena masing-masing berdiri sendiri.
+ */
+export function saldoAkhir(opts: {
+  finalPhysical: number;
+  bankFinals: number[];
+  settlement?: number;
+  expenses?: number;
+}) {
+  const bankTotal = opts.bankFinals.reduce((s, n) => s + num(n), 0);
+  return (
+    num(opts.finalPhysical) +
+    bankTotal +
+    num(opts.settlement) +
+    num(opts.expenses)
+  );
+}
+
+/**
+ * Rumus Laba:
+ * Saldo Akhir - Saldo Awal
+ */
+export function hitungLaba(opts: {
+  saldoAkhir: number;
+  saldoAwal: number;
+}) {
+  return opts.saldoAkhir - opts.saldoAwal;
+}
+
+/**
+ * Modal Awal (Legacy/Alias kompatibilitas)
  */
 export function modalAwal(opts: {
   initialPhysical: number;
   bankInitials: number[];
-  ppobInitials: number[];
+  ppobInitials?: number[];
+  additionalCapital?: number;
 }) {
-  return (
-    opts.initialPhysical +
-    opts.bankInitials.reduce((s, n) => s + n, 0) +
-    opts.ppobInitials.reduce((s, n) => s + n, 0)
-  );
+  return saldoAwal({
+    initialPhysical: opts.initialPhysical,
+    bankInitials: opts.bankInitials,
+    additionalCapital: opts.additionalCapital,
+  });
 }
 
 /**
- * Modal akhir (gross closing capital): final physical cash + final bank/PPOB balances.
- * Laba/rugi shift dihitung dengan modalAkhir - modalAwal.
+ * Modal Akhir (Legacy/Alias kompatibilitas)
  */
 export function modalAkhir(opts: {
   finalPhysical: number;
   bankFinals: number[];
-  ppobFinals: number[];
+  ppobFinals?: number[];
+  settlement?: number;
+  expenses?: number;
 }) {
-  return (
-    opts.finalPhysical +
-    opts.bankFinals.reduce((s, n) => s + n, 0) +
-    opts.ppobFinals.reduce((s, n) => s + n, 0)
-  );
+  return saldoAkhir({
+    finalPhysical: opts.finalPhysical,
+    bankFinals: opts.bankFinals,
+    settlement: opts.settlement,
+    expenses: opts.expenses,
+  });
 }
 
 /**
- * Fee BRILink — the BRILink side: physical cash and bank accounts.
- *
- *   (Saldo Tunai Akhir + Saldo Akhir Total Bank + Setoran ke Owner + Pengeluaran + Settlement + Topup PPOB)
- *   - (Saldo Tunai Awal + Saldo Awal Total Bank + Modal Tambahan)
- *
- * Mengapa komponen ini dimasukkan:
- * - Setoran ke owner ditambahkan karena uang kas fisik diserahkan ke owner sebelum sisa kas laci dihitung.
- * - Pengeluaran operasional ditambahkan kembali agar laba kotor fee tidak berkurang oleh biaya listrik/toko.
- * - Settlement ditambahkan sebagai pendapatan fee/batch settlement EDC.
- * - Top-up PPOB ditambahkan kembali karena ditarik/ditransfer dari rekening bank ke PPOB, sehingga sisi perbankan
- *   tidak tekor akibat pemindahan saldo internal.
- * - Modal tambahan dikurangkan karena merupakan suntikan modal mid-shift.
+ * Laba Fee / Laba BRILink:
+ * Saldo Akhir - Saldo Awal
  */
 export function labaFee(opts: {
   initialPhysical: number;
@@ -156,19 +193,18 @@ export function labaFee(opts: {
   deposit?: number;
   topup?: number;
 }) {
-  const bankInitialTotal = opts.bankInitials.reduce((s, n) => s + n, 0);
-  const bankFinalTotal = opts.bankFinals.reduce((s, n) => s + n, 0);
-  const deposit = num(opts.deposit);
-  const topup = num(opts.topup);
-  return (
-    opts.finalPhysical +
-    bankFinalTotal +
-    deposit +
-    opts.expenses +
-    opts.settlement +
-    topup -
-    (opts.initialPhysical + bankInitialTotal + opts.additionalCapital)
-  );
+  const awal = saldoAwal({
+    initialPhysical: opts.initialPhysical,
+    bankInitials: opts.bankInitials,
+    additionalCapital: opts.additionalCapital,
+  });
+  const akhir = saldoAkhir({
+    finalPhysical: opts.finalPhysical,
+    bankFinals: opts.bankFinals,
+    settlement: opts.settlement,
+    expenses: opts.expenses,
+  });
+  return hitungLaba({ saldoAkhir: akhir, saldoAwal: awal });
 }
 
 /**

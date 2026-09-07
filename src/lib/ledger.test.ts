@@ -4,18 +4,20 @@ import {
   cashDelta,
   modalAwal,
   modalAkhir,
+  saldoAwal,
+  saldoAkhir,
+  hitungLaba,
   labaFee,
   ppobTerpakai,
   fsSetoran,
   fbi,
   summarize,
-  type LedgerTxn,
-} from "./ledger.js";
+} from "./ledger";
 
 describe("BRILink Ledger Accounting Audit Tests", () => {
   describe("cashDelta", () => {
     it("should correctly calculate cashDelta when kas_fisik is source", () => {
-      const txn: LedgerTxn = {
+      const txn = {
         transaction_type: "transfer",
         source_account: "kas_fisik",
         destination_account: "bank_bri",
@@ -29,7 +31,7 @@ describe("BRILink Ledger Accounting Audit Tests", () => {
     });
 
     it("should correctly calculate cashDelta for tarik_tunai", () => {
-      const txn: LedgerTxn = {
+      const txn = {
         transaction_type: "tarik_tunai",
         source_account: "bank_bri",
         destination_account: "kas_fisik",
@@ -43,7 +45,7 @@ describe("BRILink Ledger Accounting Audit Tests", () => {
     });
 
     it("should correctly calculate cashDelta for setor_tunai", () => {
-      const txn: LedgerTxn = {
+      const txn = {
         transaction_type: "setor_tunai",
         source_account: "kas_fisik",
         destination_account: "bank_bri",
@@ -57,24 +59,32 @@ describe("BRILink Ledger Accounting Audit Tests", () => {
     });
   });
 
-  describe("modalAwal & modalAkhir", () => {
-    it("should calculate total opening capital across cash, bank, and PPOB", () => {
-      const awal = modalAwal({
+  describe("Rumus Saldo Awal & Saldo Akhir", () => {
+    it("Saldo Awal: Saldo rekening shift sebelumnya + Saldo Awal Buka Kasir + Penambahan Modal (tanpa PPOB)", () => {
+      const awal = saldoAwal({
         initialPhysical: 5000000,
         bankInitials: [10000000, 5000000],
-        ppobInitials: [2000000, 1000000],
+        additionalCapital: 2000000,
       });
-      assert.equal(awal, 23000000);
+      // 5M kasir + 15M bank + 2M modal tambahan = 22M (PPOB tidak digabung)
+      assert.equal(awal, 22000000);
     });
 
-    it("should calculate total closing assets in drawer, bank, and PPOB", () => {
-      const akhir = modalAkhir({
+    it("Saldo Akhir: Saldo uang Fisik + Saldo rekening Bank + settlement + Pengeluaran (tanpa PPOB)", () => {
+      const akhir = saldoAkhir({
         finalPhysical: 3000000,
         bankFinals: [9000000, 5000000],
-        ppobFinals: [1500000, 1000000],
+        settlement: 500000,
+        expenses: 250000,
       });
-      // 3M di laci + 14M bank + 2.5M PPOB = 19.5M
-      assert.equal(akhir, 19500000);
+      // 3M fisik + 14M bank + 500rb settlement + 250rb pengeluaran = 17.75M
+      assert.equal(akhir, 17750000);
+    });
+
+    it("Rumus Laba: Saldo Akhir - Saldo Awal", () => {
+      const awal = 20000000;
+      const akhir = 21500000;
+      assert.equal(hitungLaba({ saldoAkhir: akhir, saldoAwal: awal }), 1500000);
     });
   });
 
@@ -181,8 +191,7 @@ describe("BRILink Ledger Accounting Audit Tests", () => {
   });
 
   describe("Real Shift Audits (6 September 2026)", () => {
-    it("should correctly compute Santi's shift (Hari Hari 3) with PPOB top-up from bank", () => {
-      // Santi: Topup PPOB 2.000.000 via transfer bank
+    it("should correctly compute Santi's shift (Hari Hari 3) with PPOB standalone", () => {
       const initialCash = 30500000;
       const finalCash = 48035000;
       const initialBank = 27419011;
@@ -196,44 +205,44 @@ describe("BRILink Ledger Accounting Audit Tests", () => {
       const ppobInitials = [1367701];
       const ppobFinals = [2927155];
 
-      const laba = labaFee({
+      // Rumus Saldo Awal: Bank Awal + Kas Awal + Penambahan Modal
+      const awal = saldoAwal({
         initialPhysical: initialCash,
-        finalPhysical: finalCash,
         bankInitials: [initialBank],
-        bankFinals: [finalBank],
-        expenses,
-        settlement,
         additionalCapital,
-        deposit,
-        topup,
       });
+      assert.equal(awal, 57919011);
 
-      // Laba Fee = (48.035M + 8.638M + 0 + 2.36M + 0 + 2M) - (30.5M + 27.419M + 0) = 3.114.964
-      assert.equal(laba, 3114964);
+      // Rumus Saldo Akhir: Kas Fisik + Bank Akhir + settlement + Pengeluaran
+      const akhir = saldoAkhir({
+        finalPhysical: finalCash,
+        bankFinals: [finalBank],
+        settlement,
+        expenses,
+      });
+      assert.equal(akhir, 59033975);
 
+      // Rumus Laba: Saldo Akhir - Saldo Awal
+      const laba = hitungLaba({ saldoAkhir: akhir, saldoAwal: awal });
+      assert.equal(laba, 1114964);
+
+      // Pemakaian PPOB: PPOB Awal + Topup - PPOB Akhir
       const used = ppobTerpakai({
         ppobInitials,
         ppobFinals,
         topup,
       });
-      // PPOB Terpakai = 1.367.701 + 2.000.000 - 2.927.155 = 440.546
       assert.equal(used, 440546);
 
+      // Rumus FBI: Laba - Pemakaian PPOB
       const fbiProfit = fbi({ laba, ppobUsed: used });
-      // FBI = 3.114.964 - 440.546 = 2.674.418
-      assert.equal(fbiProfit, 2674418);
+      assert.equal(fbiProfit, 674418);
 
-      // Verifikasi konsistensi akuntansi: FBI persis sama dengan perubahan aset toko + pengeluaran
-      const modalAwalToko = initialCash + initialBank + ppobInitials[0];
-      const modalAkhirToko = finalCash + finalBank + ppobFinals[0];
-      assert.equal(modalAkhirToko - modalAwalToko + expenses, fbiProfit);
-
-      // Kasir tidak mengisi setoran kasir (deposit = 0) -> FS = 0
+      // Rumus FS: 0 karena tidak ada setoran
       assert.equal(fsSetoran(deposit), 0);
     });
 
     it("should correctly compute Tiara's shift (Hari Hari 1) with cash deposit to owner", () => {
-      // Tiara: Setoran tunai ke owner 6.034.000, sisa di laci 1.250.000
       const initialCash = 11100000;
       const finalCash = 1250000;
       const initialBank = 33229628;
@@ -247,39 +256,40 @@ describe("BRILink Ledger Accounting Audit Tests", () => {
       const ppobInitials = [4009787];
       const ppobFinals = [3420159];
 
-      const laba = labaFee({
+      // Rumus Saldo Awal: Bank Awal + Kas Awal + Penambahan Modal
+      const awal = saldoAwal({
         initialPhysical: initialCash,
-        finalPhysical: finalCash,
         bankInitials: [initialBank],
-        bankFinals: [finalBank],
-        expenses,
-        settlement,
         additionalCapital,
-        deposit,
-        topup,
       });
+      assert.equal(awal, 44329628);
 
-      // Laba Fee = (1.25M + 43.406M + 6.034M + 1.147M + 895k + 0) - (11.1M + 33.229M + 0) = 8.404.083
-      assert.equal(laba, 8404083);
+      // Rumus Saldo Akhir: Kas Fisik + Bank Akhir + settlement + Pengeluaran
+      const akhir = saldoAkhir({
+        finalPhysical: finalCash,
+        bankFinals: [finalBank],
+        settlement,
+        expenses,
+      });
+      assert.equal(akhir, 46699711);
 
+      // Rumus Laba: Saldo Akhir - Saldo Awal
+      const laba = hitungLaba({ saldoAkhir: akhir, saldoAwal: awal });
+      assert.equal(laba, 2370083);
+
+      // Pemakaian PPOB
       const used = ppobTerpakai({
         ppobInitials,
         ppobFinals,
         topup,
       });
-      // PPOB Terpakai = 4.009.787 + 0 - 3.420.159 = 589.628
       assert.equal(used, 589628);
 
+      // Rumus FBI: Laba - Pemakaian PPOB
       const fbiProfit = fbi({ laba, ppobUsed: used });
-      // FBI = 8.404.083 - 589.628 = 7.814.455
-      assert.equal(fbiProfit, 7814455);
+      assert.equal(fbiProfit, 1780455);
 
-      // Verifikasi konsistensi akuntansi: FBI persis sama dengan perolehan riil toko
-      const modalAwalToko = initialCash + initialBank + ppobInitials[0];
-      const modalAkhirToko = finalCash + finalBank + ppobFinals[0];
-      assert.equal(modalAkhirToko - modalAwalToko + expenses + settlement + deposit, fbiProfit);
-
-      // FS = 6.034.000 * 15% = 905.100
+      // Rumus FS: Setoran x 15%
       assert.equal(fsSetoran(deposit), 905100);
     });
   });

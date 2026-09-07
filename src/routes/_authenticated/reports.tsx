@@ -23,11 +23,14 @@ import {
   BANKS,
   fbi,
   fsSetoran,
+  hitungLaba,
   labaFee,
   num,
   PPOB_PROVIDERS,
   ppobTerpakai,
   rupiah,
+  saldoAkhir,
+  saldoAwal,
 } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
 import { QueryError } from "@/components/QueryError";
@@ -211,24 +214,39 @@ function Reports() {
         // Shift yang masih terbuka — termasuk yang laporannya ditolak owner —
         // punya final_amount = 0 di semua baris ppob_balances dan topup_request
         // = 0, jadi angka apa pun yang dihitung di sini omong kosong. Digate
-        // sama seperti Laba Fee & Modal Akhir: modal_akhir NULL ⇒ tampilkan "—".
+        // sama seperti Laba & Saldo Akhir: modal_akhir NULL ⇒ tampilkan "—".
         const closed = s.modal_akhir !== null;
         const ppobUsed = closed
           ? ppobTerpakai({ ppobInitials, ppobFinals, topup: num(s.topup_request) })
           : null;
-        const laba = closed
-          ? labaFee({
-              initialPhysical: num(s.initial_physical_balance),
+
+        const bankInitialTotal = bankInitialsByShift.get(s.id) ?? 0;
+        const bankFinalTotal = bankFinalsByShift.get(s.id) ?? 0;
+
+        // Rumus Saldo Awal: Saldo semua rekening shift sebelumnya (Bank) + Saldo Awal Buka Kasir + Penambahan Modal
+        // (PPOB tidak digabung karena berdiri sendiri)
+        const rowSaldoAwal = saldoAwal({
+          initialPhysical: num(s.initial_physical_balance),
+          bankInitials: [bankInitialTotal],
+          additionalCapital: num(s.additional_capital),
+        });
+
+        // Rumus Saldo Akhir: Saldo uang Fisik tutup kasir + Saldo rekening Bank tutup kasir + settlement + Pengeluaran
+        // (PPOB tidak digabung karena berdiri sendiri)
+        const rowSaldoAkhir = closed
+          ? saldoAkhir({
               finalPhysical: num(s.final_physical_balance),
-              deposit: num(s.deposit_amount),
-              topup: num(s.topup_request),
-              bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
-              bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
-              expenses: num(s.total_expenses),
+              bankFinals: [bankFinalTotal],
               settlement: num(s.settlement_amount),
-              additionalCapital: num(s.additional_capital),
+              expenses: num(s.total_expenses),
             })
           : null;
+
+        // Rumus Laba: Saldo Akhir - Saldo Awal
+        const laba = closed && rowSaldoAkhir !== null
+          ? hitungLaba({ saldoAkhir: rowSaldoAkhir, saldoAwal: rowSaldoAwal })
+          : null;
+
         return {
           shift: s,
           txnCount: txnCountByShift.get(s.id) ?? 0,
@@ -237,8 +255,10 @@ function Reports() {
           // dirender di mana pun, jadi tanpa ini angkanya tidak bisa diaudit.
           ppobInitial: ppobInitials.reduce((a, b) => a + b, 0),
           ppobFinal: ppobFinals.reduce((a, b) => a + b, 0),
-          bankInitial: bankInitialsByShift.get(s.id) ?? 0,
-          bankFinal: bankFinalsByShift.get(s.id) ?? 0,
+          bankInitial: bankInitialTotal,
+          bankFinal: bankFinalTotal,
+          saldoAwal: rowSaldoAwal,
+          saldoAkhir: rowSaldoAkhir,
           laba,
           fbi: laba === null || ppobUsed === null ? null : fbi({ laba, ppobUsed }),
           // Rumus FS = Setoran x 15% (hanya untuk shift closed, jika shift open = null agar tampil "—")
@@ -555,7 +575,7 @@ function Reports() {
                   <th className="pb-3">Shift & Mulai</th>
                   <th className="pb-3">Kasir</th>
                   <th className="pb-3">Cabang</th>
-                  <th className="pb-3 text-right">Modal Awal</th>
+                  <th className="pb-3 text-right">Saldo Awal</th>
                   <th className="pb-3 text-right">Saldo Fisik</th>
                   <th className="pb-3 text-right">Pengeluaran</th>
                   <th className="pb-3">Keterangan</th>
@@ -563,9 +583,9 @@ function Reports() {
                   <th className="pb-3 text-right">Modal Tambahan</th>
                   <th className="pb-3 text-right">Settlement</th>
                   <th className="pb-3 text-right">PPOB Terpakai</th>
-                  <th className="pb-3 text-right">Modal Akhir</th>
-                  <th className="pb-3 text-right">Laba Fee</th>
-                  <th className="pb-3 text-right" title="Laba Fee − PPOB Terpakai">
+                  <th className="pb-3 text-right">Saldo Akhir</th>
+                  <th className="pb-3 text-right">Laba</th>
+                  <th className="pb-3 text-right" title="Laba − PPOB Terpakai">
                     FBI
                   </th>
                   <th
@@ -617,8 +637,11 @@ function Reports() {
                     </td>
                     <td className="py-3.5 font-medium">{r.cashier}</td>
                     <td className="py-3.5 text-muted-foreground text-xs">{r.branchName}</td>
-                    <td className="py-3.5 text-right font-medium text-cash">
-                      {rupiah(r.shift.modal_awal)}
+                    <td
+                      className="py-3.5 text-right font-medium text-cash"
+                      title={`Rumus Saldo Awal: Bank (${rupiah(r.bankInitial)}) + Kas Awal (${rupiah(r.shift.initial_physical_balance)}) + Modal Tambahan (${rupiah(r.shift.additional_capital)})`}
+                    >
+                      {rupiah(r.saldoAwal)}
                     </td>
                     <td className="py-3.5 text-right font-medium">
                       {r.shift.final_physical_balance !== null
@@ -663,8 +686,15 @@ function Reports() {
                     >
                       {r.ppobUsed !== null ? rupiah(r.ppobUsed) : "—"}
                     </td>
-                    <td className="py-3.5 text-right font-bold text-success">
-                      {r.shift.modal_akhir !== null ? rupiah(r.shift.modal_akhir) : "—"}
+                    <td
+                      className="py-3.5 text-right font-bold text-success"
+                      title={
+                        r.saldoAkhir !== null
+                          ? `Rumus Saldo Akhir: Kas Fisik (${rupiah(r.shift.final_physical_balance)}) + Bank (${rupiah(r.bankFinal)}) + Settlement (${rupiah(r.shift.settlement_amount)}) + Pengeluaran (${rupiah(r.shift.total_expenses)})`
+                          : "Shift belum ditutup"
+                      }
+                    >
+                      {r.saldoAkhir !== null ? rupiah(r.saldoAkhir) : "—"}
                     </td>
                     <td
                       className={cn(
@@ -672,20 +702,20 @@ function Reports() {
                         r.laba !== null && r.laba < 0 ? "text-destructive" : "text-success",
                       )}
                       title={
-                        r.laba !== null
-                          ? `(Kas Fisik ${rupiah(r.shift.final_physical_balance)} + Bank ${rupiah(r.bankFinal)} + Setoran ${rupiah(r.shift.deposit_amount)} + Pengeluaran ${rupiah(r.shift.total_expenses)} + Settlement ${rupiah(r.shift.settlement_amount)} + Topup PPOB ${rupiah(r.shift.topup_request)}) − (Kas Awal ${rupiah(r.shift.initial_physical_balance)} + Bank Awal ${rupiah(r.bankInitial)} + Modal Tambahan ${rupiah(r.shift.additional_capital)})`
+                        r.laba !== null && r.saldoAkhir !== null
+                          ? `Rumus Laba: Saldo Akhir (${rupiah(r.saldoAkhir)}) − Saldo Awal (${rupiah(r.saldoAwal)})`
                           : "Shift belum ditutup"
                       }
                     >
                       {r.laba !== null ? rupiah(r.laba) : "—"}
                     </td>
                     {/* FBI memang bisa negatif kalau pemakaian saldo PPOB
-                        melebihi laba fee — itu justru inti kolom ini. */}
+                        melebihi laba — itu justru inti kolom ini. */}
                     <td
                       className="py-3.5 text-right font-bold"
                       title={
                         r.fbi !== null
-                          ? `Rumus FBI = Laba Fee (${rupiah(r.laba)}) − PPOB Terpakai (${rupiah(r.ppobUsed)})`
+                          ? `Rumus FBI: Laba (${rupiah(r.laba)}) − PPOB Terpakai (${rupiah(r.ppobUsed)})`
                           : "Shift belum ditutup"
                       }
                     >
@@ -701,7 +731,7 @@ function Reports() {
                       className="py-3.5 text-right font-medium text-cash"
                       title={
                         r.fs !== null
-                          ? `Rumus FS = Setoran (${rupiah(r.shift.deposit_amount)}) × 15%`
+                          ? `Rumus FS: Setoran (${rupiah(r.shift.deposit_amount)}) × 15%`
                           : "Shift belum ditutup"
                       }
                     >

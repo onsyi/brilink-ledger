@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { labaFee, num, rupiah } from "@/lib/ledger";
+import { hitungLaba, num, rupiah, saldoAkhir, saldoAwal } from "@/lib/ledger";
 import { QueryError } from "@/components/QueryError";
 import { cn } from "@/lib/utils";
 
@@ -98,25 +98,36 @@ export function OwnerOverview({ username }: { username?: string | null }) {
           (ppobFinalsByShift.get(p.shift_id) ?? 0) + num(p.final_amount),
         );
       });
-      const rows = (shifts ?? []).map((s) => ({
-        shift: s,
-        txnCount: txnCountByShift.get(s.id) ?? 0,
-        cashier: nameOf(s.user_id),
-        labaFee:
+      const rows = (shifts ?? []).map((s) => {
+        const bankInitialTotal = bankInitialsByShift.get(s.id) ?? 0;
+        const bankFinalTotal = bankFinalsByShift.get(s.id) ?? 0;
+        const rowSaldoAwal = saldoAwal({
+          initialPhysical: num(s.initial_physical_balance),
+          bankInitials: [bankInitialTotal],
+          additionalCapital: num(s.additional_capital),
+        });
+        const rowSaldoAkhir =
           s.modal_akhir === null
             ? null
-            : labaFee({
-                initialPhysical: num(s.initial_physical_balance),
+            : saldoAkhir({
                 finalPhysical: num(s.final_physical_balance),
-                deposit: num(s.deposit_amount),
-                topup: num(s.topup_request),
-                bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
-                bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
-                expenses: num(s.total_expenses),
+                bankFinals: [bankFinalTotal],
                 settlement: num(s.settlement_amount),
-                additionalCapital: num(s.additional_capital),
-              }),
-      }));
+                expenses: num(s.total_expenses),
+              });
+        const laba =
+          rowSaldoAkhir !== null
+            ? hitungLaba({ saldoAkhir: rowSaldoAkhir, saldoAwal: rowSaldoAwal })
+            : null;
+        return {
+          shift: s,
+          txnCount: txnCountByShift.get(s.id) ?? 0,
+          cashier: nameOf(s.user_id),
+          saldoAwal: rowSaldoAwal,
+          saldoAkhir: rowSaldoAkhir,
+          labaFee: laba,
+        };
+      });
       const isToday = (dateStr?: string | null) => {
         if (!dateStr) return false;
         const d = new Date(dateStr);
@@ -269,8 +280,8 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                 </div>
                 <div className="num mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
                   <span className="text-muted-foreground">
-                    Modal awal{" "}
-                    <span className="font-semibold text-cash">{rupiah(r.shift.modal_awal)}</span>
+                    Saldo awal{" "}
+                    <span className="font-semibold text-cash">{rupiah(r.saldoAwal)}</span>
                   </span>
                   <span className="text-muted-foreground">{r.txnCount} transaksi</span>
                   <span className="font-semibold text-muted-foreground">Laba —</span>
