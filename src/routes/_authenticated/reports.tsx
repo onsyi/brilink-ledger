@@ -237,6 +237,8 @@ function Reports() {
           // dirender di mana pun, jadi tanpa ini angkanya tidak bisa diaudit.
           ppobInitial: ppobInitials.reduce((a, b) => a + b, 0),
           ppobFinal: ppobFinals.reduce((a, b) => a + b, 0),
+          bankInitial: bankInitialsByShift.get(s.id) ?? 0,
+          bankFinal: bankFinalsByShift.get(s.id) ?? 0,
           laba,
           fbi: laba === null || ppobUsed === null ? null : fbi({ laba, ppobUsed }),
           // Rumus FS = Setoran x 15% (hanya untuk shift closed, jika shift open = null agar tampil "—")
@@ -566,7 +568,10 @@ function Reports() {
                   <th className="pb-3 text-right" title="Laba Fee − PPOB Terpakai">
                     FBI
                   </th>
-                  <th className="pb-3 text-right" title="15% dari setoran kasir">
+                  <th
+                    className="pb-3 text-right"
+                    title="Rumus FS = Setoran Kasir × 15% (0 jika tidak ada setoran)"
+                  >
                     FS
                   </th>
                   <th className="pb-3 text-center">Status</th>
@@ -666,12 +671,24 @@ function Reports() {
                         "py-3.5 text-right font-bold",
                         r.laba !== null && r.laba < 0 ? "text-destructive" : "text-success",
                       )}
+                      title={
+                        r.laba !== null
+                          ? `(Kas Fisik ${rupiah(r.shift.final_physical_balance)} + Bank ${rupiah(r.bankFinal)} + Setoran ${rupiah(r.shift.deposit_amount)} + Pengeluaran ${rupiah(r.shift.total_expenses)} + Settlement ${rupiah(r.shift.settlement_amount)} + Topup PPOB ${rupiah(r.shift.topup_request)}) − (Kas Awal ${rupiah(r.shift.initial_physical_balance)} + Bank Awal ${rupiah(r.bankInitial)} + Modal Tambahan ${rupiah(r.shift.additional_capital)})`
+                          : "Shift belum ditutup"
+                      }
                     >
                       {r.laba !== null ? rupiah(r.laba) : "—"}
                     </td>
                     {/* FBI memang bisa negatif kalau pemakaian saldo PPOB
                         melebihi laba fee — itu justru inti kolom ini. */}
-                    <td className="py-3.5 text-right font-bold">
+                    <td
+                      className="py-3.5 text-right font-bold"
+                      title={
+                        r.fbi !== null
+                          ? `Rumus FBI = Laba Fee (${rupiah(r.laba)}) − PPOB Terpakai (${rupiah(r.ppobUsed)})`
+                          : "Shift belum ditutup"
+                      }
+                    >
                       {r.fbi !== null ? (
                         <span className={r.fbi < 0 ? "text-destructive" : "text-success"}>
                           {rupiah(r.fbi)}
@@ -680,7 +697,14 @@ function Reports() {
                         "—"
                       )}
                     </td>
-                    <td className="py-3.5 text-right font-medium text-cash">
+                    <td
+                      className="py-3.5 text-right font-medium text-cash"
+                      title={
+                        r.fs !== null
+                          ? `Rumus FS = Setoran (${rupiah(r.shift.deposit_amount)}) × 15%`
+                          : "Shift belum ditutup"
+                      }
+                    >
                       {r.fs !== null ? rupiah(r.fs) : "—"}
                     </td>
                     <td className="py-3.5 text-center">
