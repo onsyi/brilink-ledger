@@ -495,14 +495,16 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: OpenShif
               <Pencil className="mr-1.5 size-4" /> Perbaiki modal awal
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowCancel(true)}
-            className="border-destructive/40 text-destructive hover:bg-destructive/10"
-          >
-            <XCircle className="mr-1.5 size-4" /> Batalkan shift
-          </Button>
+          {!shift.rejected_at && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCancel(true)}
+              className="border-destructive/40 text-destructive hover:bg-destructive/10"
+            >
+              <XCircle className="mr-1.5 size-4" /> Batalkan shift
+            </Button>
+          )}
           <Button asChild size="sm">
             <Link to="/close-shift">
               Tutup shift <ArrowRight className="ml-1 size-4" />

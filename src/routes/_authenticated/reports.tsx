@@ -220,6 +220,8 @@ function Reports() {
           ? labaFee({
               initialPhysical: num(s.initial_physical_balance),
               finalPhysical: num(s.final_physical_balance),
+              deposit: num(s.deposit_amount),
+              topup: num(s.topup_request),
               bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
               bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
               expenses: num(s.total_expenses),
@@ -237,8 +239,8 @@ function Reports() {
           ppobFinal: ppobFinals.reduce((a, b) => a + b, 0),
           laba,
           fbi: laba === null || ppobUsed === null ? null : fbi({ laba, ppobUsed }),
-          // Rumus FS = Setoran x 15% (jika setoran 0, FS = 0)
-          fs: fsSetoran(num(s.deposit_amount)),
+          // Rumus FS = Setoran x 15% (hanya untuk shift closed, jika shift open = null agar tampil "—")
+          fs: s.status === "open" ? null : fsSetoran(num(s.deposit_amount)),
           cashier: (profiles ?? []).find((p) => p.id === s.user_id)?.username ?? "—",
           branchName: (s.branch_id && branchNameOf.get(s.branch_id)) || "—",
         };
@@ -316,7 +318,7 @@ function Reports() {
   // kalau gate-nya nanti berbeda.
   const totalPpobUsed = rows.reduce((s, r) => s + (r.ppobUsed ?? 0), 0);
   const totalFbi = rows.reduce((s, r) => s + (r.fbi ?? 0), 0);
-  const totalFs = rows.reduce((s, r) => s + r.fs, 0);
+  const totalFs = rows.reduce((s, r) => s + (r.fs ?? 0), 0);
 
   const periodStats = useMemo(() => {
     return {
@@ -659,7 +661,12 @@ function Reports() {
                     <td className="py-3.5 text-right font-bold text-success">
                       {r.shift.modal_akhir !== null ? rupiah(r.shift.modal_akhir) : "—"}
                     </td>
-                    <td className="py-3.5 text-right font-bold text-success">
+                    <td
+                      className={cn(
+                        "py-3.5 text-right font-bold",
+                        r.laba !== null && r.laba < 0 ? "text-destructive" : "text-success",
+                      )}
+                    >
                       {r.laba !== null ? rupiah(r.laba) : "—"}
                     </td>
                     {/* FBI memang bisa negatif kalau pemakaian saldo PPOB
@@ -673,7 +680,9 @@ function Reports() {
                         "—"
                       )}
                     </td>
-                    <td className="py-3.5 text-right font-medium text-cash">{rupiah(r.fs)}</td>
+                    <td className="py-3.5 text-right font-medium text-cash">
+                      {r.fs !== null ? rupiah(r.fs) : "—"}
+                    </td>
                     <td className="py-3.5 text-center">
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
@@ -742,7 +751,14 @@ function Reports() {
                   <td colSpan={2} />
                   <td className="py-3.5 text-right text-accent">{rupiah(totalPpobUsed)}</td>
                   <td />
-                  <td className="py-3.5 text-right text-success">{rupiah(totalLaba)}</td>
+                  <td
+                    className={cn(
+                      "py-3.5 text-right",
+                      totalLaba < 0 ? "text-destructive" : "text-success",
+                    )}
+                  >
+                    {rupiah(totalLaba)}
+                  </td>
                   <td
                     className={cn(
                       "py-3.5 text-right",

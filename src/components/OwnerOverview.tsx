@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { labaFee, num, rupiah } from "@/lib/ledger";
 import { QueryError } from "@/components/QueryError";
+import { cn } from "@/lib/utils";
 
 export function OwnerOverview({ username }: { username?: string | null }) {
   const [branchFilter, setBranchFilter] = useState<string>("all");
@@ -107,6 +108,8 @@ export function OwnerOverview({ username }: { username?: string | null }) {
             : labaFee({
                 initialPhysical: num(s.initial_physical_balance),
                 finalPhysical: num(s.final_physical_balance),
+                deposit: num(s.deposit_amount),
+                topup: num(s.topup_request),
                 bankInitials: [bankInitialsByShift.get(s.id) ?? 0],
                 bankFinals: [bankFinalsByShift.get(s.id) ?? 0],
                 expenses: num(s.total_expenses),
@@ -329,7 +332,12 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                       </span>
                     ) : null}
                   </td>
-                  <td className="py-3 text-right align-top font-semibold text-success">
+                  <td
+                    className={cn(
+                      "py-3 text-right align-top font-semibold",
+                      r.labaFee !== null && r.labaFee < 0 ? "text-destructive" : "text-success",
+                    )}
+                  >
                     {r.labaFee !== null ? rupiah(r.labaFee) : "—"}
                   </td>
                   <td className="py-3 text-right">

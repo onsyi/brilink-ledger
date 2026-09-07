@@ -179,4 +179,108 @@ describe("BRILink Ledger Accounting Audit Tests", () => {
       assert.equal(summary.cashNet, 111000);
     });
   });
+
+  describe("Real Shift Audits (6 September 2026)", () => {
+    it("should correctly compute Santi's shift (Hari Hari 3) with PPOB top-up from bank", () => {
+      // Santi: Topup PPOB 2.000.000 via transfer bank
+      const initialCash = 30500000;
+      const finalCash = 48035000;
+      const initialBank = 27419011;
+      const finalBank = 8638975;
+      const expenses = 2360000;
+      const topup = 2000000;
+      const deposit = 0;
+      const settlement = 0;
+      const additionalCapital = 0;
+
+      const ppobInitials = [1367701];
+      const ppobFinals = [2927155];
+
+      const laba = labaFee({
+        initialPhysical: initialCash,
+        finalPhysical: finalCash,
+        bankInitials: [initialBank],
+        bankFinals: [finalBank],
+        expenses,
+        settlement,
+        additionalCapital,
+        deposit,
+        topup,
+      });
+
+      // Laba Fee = (48.035M + 8.638M + 0 + 2.36M + 0 + 2M) - (30.5M + 27.419M + 0) = 3.114.964
+      assert.equal(laba, 3114964);
+
+      const used = ppobTerpakai({
+        ppobInitials,
+        ppobFinals,
+        topup,
+      });
+      // PPOB Terpakai = 1.367.701 + 2.000.000 - 2.927.155 = 440.546
+      assert.equal(used, 440546);
+
+      const fbiProfit = fbi({ laba, ppobUsed: used });
+      // FBI = 3.114.964 - 440.546 = 2.674.418
+      assert.equal(fbiProfit, 2674418);
+
+      // Verifikasi konsistensi akuntansi: FBI persis sama dengan perubahan aset toko + pengeluaran
+      const modalAwalToko = initialCash + initialBank + ppobInitials[0];
+      const modalAkhirToko = finalCash + finalBank + ppobFinals[0];
+      assert.equal(modalAkhirToko - modalAwalToko + expenses, fbiProfit);
+
+      // Kasir tidak mengisi setoran kasir (deposit = 0) -> FS = 0
+      assert.equal(fsSetoran(deposit), 0);
+    });
+
+    it("should correctly compute Tiara's shift (Hari Hari 1) with cash deposit to owner", () => {
+      // Tiara: Setoran tunai ke owner 6.034.000, sisa di laci 1.250.000
+      const initialCash = 11100000;
+      const finalCash = 1250000;
+      const initialBank = 33229628;
+      const finalBank = 43406940;
+      const expenses = 1147771;
+      const settlement = 895000;
+      const additionalCapital = 0;
+      const deposit = 6034000;
+      const topup = 0;
+
+      const ppobInitials = [4009787];
+      const ppobFinals = [3420159];
+
+      const laba = labaFee({
+        initialPhysical: initialCash,
+        finalPhysical: finalCash,
+        bankInitials: [initialBank],
+        bankFinals: [finalBank],
+        expenses,
+        settlement,
+        additionalCapital,
+        deposit,
+        topup,
+      });
+
+      // Laba Fee = (1.25M + 43.406M + 6.034M + 1.147M + 895k + 0) - (11.1M + 33.229M + 0) = 8.404.083
+      assert.equal(laba, 8404083);
+
+      const used = ppobTerpakai({
+        ppobInitials,
+        ppobFinals,
+        topup,
+      });
+      // PPOB Terpakai = 4.009.787 + 0 - 3.420.159 = 589.628
+      assert.equal(used, 589628);
+
+      const fbiProfit = fbi({ laba, ppobUsed: used });
+      // FBI = 8.404.083 - 589.628 = 7.814.455
+      assert.equal(fbiProfit, 7814455);
+
+      // Verifikasi konsistensi akuntansi: FBI persis sama dengan perolehan riil toko
+      const modalAwalToko = initialCash + initialBank + ppobInitials[0];
+      const modalAkhirToko = finalCash + finalBank + ppobFinals[0];
+      assert.equal(modalAkhirToko - modalAwalToko + expenses + settlement + deposit, fbiProfit);
+
+      // FS = 6.034.000 * 15% = 905.100
+      assert.equal(fsSetoran(deposit), 905100);
+    });
+  });
 });

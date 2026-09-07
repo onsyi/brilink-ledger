@@ -29,7 +29,10 @@ export const rupiah = (value: number | string | null | undefined) =>
     maximumFractionDigits: 0,
   }).format(Number(value ?? 0));
 
-export const num = (value: number | string | null | undefined) => Number(value ?? 0);
+export const num = (value: number | string | null | undefined) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
 
 export type LedgerTxn = {
   transaction_type: string;
@@ -129,13 +132,18 @@ export function modalAkhir(opts: {
 }
 
 /**
- * Fee BRILink — the BRILink side only: physical cash and bank accounts.
+ * Fee BRILink — the BRILink side: physical cash and bank accounts.
  *
- *   (Saldo Tunai Akhir + Saldo Akhir Total Bank + Pengeluaran + Settlement)
+ *   (Saldo Tunai Akhir + Saldo Akhir Total Bank + Setoran ke Owner + Pengeluaran + Settlement + Topup PPOB)
  *   - (Saldo Tunai Awal + Saldo Awal Total Bank + Modal Tambahan)
  *
- * Modal tambahan dikurangkan karena merupakan suntikan modal mid-shift.
- * PPOB dicatat terpisah via {@link ppobTerpakai}.
+ * Mengapa komponen ini dimasukkan:
+ * - Setoran ke owner ditambahkan karena uang kas fisik diserahkan ke owner sebelum sisa kas laci dihitung.
+ * - Pengeluaran operasional ditambahkan kembali agar laba kotor fee tidak berkurang oleh biaya listrik/toko.
+ * - Settlement ditambahkan sebagai pendapatan fee/batch settlement EDC.
+ * - Top-up PPOB ditambahkan kembali karena ditarik/ditransfer dari rekening bank ke PPOB, sehingga sisi perbankan
+ *   tidak tekor akibat pemindahan saldo internal.
+ * - Modal tambahan dikurangkan karena merupakan suntikan modal mid-shift.
  */
 export function labaFee(opts: {
   initialPhysical: number;
@@ -145,14 +153,20 @@ export function labaFee(opts: {
   expenses: number;
   settlement: number;
   additionalCapital: number;
+  deposit?: number;
+  topup?: number;
 }) {
   const bankInitialTotal = opts.bankInitials.reduce((s, n) => s + n, 0);
   const bankFinalTotal = opts.bankFinals.reduce((s, n) => s + n, 0);
+  const deposit = num(opts.deposit);
+  const topup = num(opts.topup);
   return (
     opts.finalPhysical +
     bankFinalTotal +
+    deposit +
     opts.expenses +
-    opts.settlement -
+    opts.settlement +
+    topup -
     (opts.initialPhysical + bankInitialTotal + opts.additionalCapital)
   );
 }
@@ -172,7 +186,7 @@ export function ppobTerpakai(opts: {
 }) {
   const initialTotal = opts.ppobInitials.reduce((s, n) => s + n, 0);
   const finalTotal = opts.ppobFinals.reduce((s, n) => s + n, 0);
-  return initialTotal + opts.topup - finalTotal;
+  return initialTotal + num(opts.topup) - finalTotal;
 }
 
 /**
@@ -192,6 +206,7 @@ export function fbi(opts: { laba: number; ppobUsed: number }) {
  * Kasir yang tidak mengisi setoran kasir (setoran = 0) menghasilkan FS = 0.
  */
 export function fsSetoran(deposit: number, rate = FS_RATE) {
-  if (deposit <= 0) return 0;
-  return Math.round(deposit * rate);
+  const d = num(deposit);
+  if (d <= 0) return 0;
+  return Math.round(d * rate);
 }
