@@ -1,52 +1,5 @@
 import "./styles.css";
-import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { createRouter, RouterProvider } from "@tanstack/react-router";
-import { routeTree } from "./routeTree.gen";
-import { Toaster } from "@/components/ui/sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
-
-const router = createRouter({
-  routeTree,
-  context: { queryClient },
-  scrollRestoration: true,
-  defaultPreloadStaleTime: 0,
-});
-
-supabase.auth.onAuthStateChange((event) => {
-  if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
-  router.invalidate();
-  if (event === "SIGNED_OUT") {
-    queryClient.clear();
-  } else {
-    queryClient.invalidateQueries();
-  }
-});
-
-function RealtimeRefresh() {
-  const queryClient = useQueryClient();
-  useRealtimeRefresh(queryClient);
-  return null;
-}
-
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <RealtimeRefresh />
-      <RouterProvider router={router} />
-      <Toaster richColors position="top-center" />
-    </QueryClientProvider>
-  );
-}
+import { App } from "@/components/AppRoot";
 
 const rootElement = document.getElementById("root")!;
 import("react-dom/client").then(({ createRoot }) => {
