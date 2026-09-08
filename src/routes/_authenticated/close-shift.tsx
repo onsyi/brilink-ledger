@@ -10,6 +10,7 @@ import {
   ArrowRight,
   DollarSign,
   Undo2,
+  TriangleAlert,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -61,11 +62,16 @@ function CloseShift() {
   const [topup, setTopup] = useState("");
   const [deposit, setDeposit] = useState("");
   const [settlement, setSettlement] = useState("");
+  const [withdrawal, setWithdrawal] = useState("");
   const [banks, setBanks] = useState<Record<string, string>>({});
   const [ppob, setPpob] = useState<Record<string, string>>({});
   const [showConfirm, setShowConfirm] = useState(false);
   const [prefilled, setPrefilled] = useState(false);
   const submittingRef = useRef(false);
+
+  // Guard "pengeluaran ganda": top-up PPOB yang juga ditulis di Pengeluaran
+  // dihitung dua kali (inflasi laba/FBI) — pola berulang yang ditemukan audit.
+  const doubleCountRisk = Number(topup || 0) > 0 && Number(expenses || 0) > 0;
 
   // Laporan yang ditolak owner dikembalikan lengkap dengan angkanya. Yang
   // diminta koreksi, bukan ketik ulang: sepuluh saldo bank dan lima PPOB yang
@@ -85,6 +91,7 @@ function CloseShift() {
     setTopup(money(rejectedSnapshot.topup_request));
     setDeposit(money(rejectedSnapshot.deposit_amount));
     setSettlement(money(rejectedSnapshot.settlement_amount));
+    setWithdrawal(money(rejectedSnapshot.owner_withdrawal));
     setBanks(bankMap);
     setPpob(ppobMap);
     setPrefilled(true);
@@ -101,6 +108,7 @@ function CloseShift() {
       if (Number(deposit || 0) < 0) throw new Error("Setoran tidak boleh negatif");
       if (Number(settlement || 0) < 0) throw new Error("Settlement tidak boleh negatif");
       if (Number(additionalCapital || 0) < 0) throw new Error("Modal tambahan tidak boleh negatif");
+      if (Number(withdrawal || 0) < 0) throw new Error("Penarikan owner tidak boleh negatif");
       // Setoran sengaja tidak dibandingkan dengan saldo fisik akhir: kasir
       // menyerahkan uang ke owner lebih dulu, lalu menghitung sisa di laci, jadi
       // setoran memang normal lebih besar dari saldo akhir.
@@ -123,6 +131,7 @@ function CloseShift() {
         _topup: Number(topup || 0),
         _deposit: Number(deposit || 0),
         _settlement: Number(settlement || 0),
+        _owner_withdrawal: Number(withdrawal || 0),
         _bank_snapshots: bankSnapshots,
         _ppob_snapshots: ppobSnapshots,
       });
@@ -277,6 +286,13 @@ function CloseShift() {
             value={settlement}
             onChange={setSettlement}
           />
+          <MoneyInput
+            id="owner-withdrawal"
+            label="Penarikan owner (uang dibawa/ditransfer owner)"
+            value={withdrawal}
+            onChange={setWithdrawal}
+            hint="Uang yang diambil owner dari outlet — jangan ditulis di Pengeluaran"
+          />
         </div>
         <div className="space-y-1.5 pt-2">
           <Label htmlFor="expense-notes" className="text-xs font-medium text-muted-foreground">
@@ -292,6 +308,24 @@ function CloseShift() {
           />
         </div>
       </section>
+
+      {/* Guard: top-up PPOB jangan dihitung ganda di Pengeluaran */}
+      {doubleCountRisk && (
+        <div className="flex gap-2.5 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 backdrop-blur-sm">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
+          <div className="text-xs">
+            <p className="font-semibold text-warning">
+              Ada top-up PPOB dan pengeluaran sekaligus — cek jangan sampai dihitung dua kali
+            </p>
+            <p className="mt-1 text-muted-foreground">
+              Top-up saldo PPOB sudah dicatat di kolom <b>Penambahan saldo PPOB</b>. Uang top-up itu{" "}
+              <b>tidak boleh</b> ditulis ulang di Pengeluaran, kecuali benar-benar biaya lain.
+              Pengeluaran hanya untuk biaya operasional (bensin, listrik, parkir). Uang yang diambil
+              owner masuk ke <b>Penarikan owner</b>, bukan Pengeluaran.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Bank Machine Snapshot */}
       <section className="glass-card p-5 sm:p-6">

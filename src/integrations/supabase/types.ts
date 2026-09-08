@@ -235,6 +235,7 @@ export type Database = {
           initial_physical_balance: number;
           modal_akhir: number | null;
           modal_awal: number | null;
+          owner_withdrawal: number;
           rejected_at: string | null;
           rejected_snapshot: Json | null;
           rejection_reason: string | null;
@@ -258,6 +259,7 @@ export type Database = {
           initial_physical_balance?: number;
           modal_akhir?: number | null;
           modal_awal?: number | null;
+          owner_withdrawal?: number;
           rejected_at?: string | null;
           rejected_snapshot?: Json | null;
           rejection_reason?: string | null;
@@ -281,6 +283,7 @@ export type Database = {
           initial_physical_balance?: number;
           modal_akhir?: number | null;
           modal_awal?: number | null;
+          owner_withdrawal?: number;
           rejected_at?: string | null;
           rejected_snapshot?: Json | null;
           rejection_reason?: string | null;

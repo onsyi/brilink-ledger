@@ -135,7 +135,7 @@ function Reports() {
       let query = supabase
         .from("shifts")
         .select(
-          "id, user_id, start_time, initial_physical_balance, final_physical_balance, modal_awal, modal_akhir, additional_capital, settlement_amount, total_expenses, expense_notes, deposit_amount, deposit_confirmed, topup_request, status, branch_id, rejected_at, rejection_reason",
+          "id, user_id, start_time, initial_physical_balance, final_physical_balance, modal_awal, modal_akhir, additional_capital, settlement_amount, total_expenses, expense_notes, deposit_amount, deposit_confirmed, topup_request, owner_withdrawal, status, branch_id, rejected_at, rejection_reason",
           { count: "exact" },
         )
         .order("start_time", { ascending: false })
@@ -231,7 +231,7 @@ function Reports() {
           additionalCapital: num(s.additional_capital),
         });
 
-        // Rumus Saldo Akhir: Saldo uang Fisik tutup kasir + Saldo rekening Bank tutup kasir + settlement + Pengeluaran
+        // Rumus Saldo Akhir: Saldo uang Fisik tutup kasir + Saldo rekening Bank tutup kasir + settlement + Pengeluaran + Penarikan Owner
         // (PPOB tidak digabung karena berdiri sendiri)
         const rowSaldoAkhir = closed
           ? saldoAkhir({
@@ -239,13 +239,15 @@ function Reports() {
               bankFinals: [bankFinalTotal],
               settlement: num(s.settlement_amount),
               expenses: num(s.total_expenses),
+              ownerWithdrawal: num(s.owner_withdrawal),
             })
           : null;
 
         // Rumus Laba: Saldo Akhir - Saldo Awal
-        const laba = closed && rowSaldoAkhir !== null
-          ? hitungLaba({ saldoAkhir: rowSaldoAkhir, saldoAwal: rowSaldoAwal })
-          : null;
+        const laba =
+          closed && rowSaldoAkhir !== null
+            ? hitungLaba({ saldoAkhir: rowSaldoAkhir, saldoAwal: rowSaldoAwal })
+            : null;
 
         return {
           shift: s,
@@ -341,6 +343,7 @@ function Reports() {
   const totalPpobUsed = rows.reduce((s, r) => s + (r.ppobUsed ?? 0), 0);
   const totalFbi = rows.reduce((s, r) => s + (r.fbi ?? 0), 0);
   const totalFs = rows.reduce((s, r) => s + (r.fs ?? 0), 0);
+  const totalWithdrawal = rows.reduce((s, r) => s + num(r.shift.owner_withdrawal), 0);
 
   const periodStats = useMemo(() => {
     return {
@@ -582,6 +585,12 @@ function Reports() {
                   <th className="pb-3 text-right">Setoran</th>
                   <th className="pb-3 text-right">Modal Tambahan</th>
                   <th className="pb-3 text-right">Settlement</th>
+                  <th
+                    className="pb-3 text-right"
+                    title="Uang yang ditarik owner dari outlet selama shift"
+                  >
+                    Tarik Owner
+                  </th>
                   <th className="pb-3 text-right">PPOB Terpakai</th>
                   <th className="pb-3 text-right">Saldo Akhir</th>
                   <th className="pb-3 text-right">Laba</th>
@@ -675,6 +684,9 @@ function Reports() {
                     </td>
                     <td className="py-3.5 text-right">{rupiah(r.shift.additional_capital)}</td>
                     <td className="py-3.5 text-right">{rupiah(r.shift.settlement_amount)}</td>
+                    <td className="py-3.5 text-right text-cash">
+                      {rupiah(r.shift.owner_withdrawal)}
+                    </td>
                     <td
                       className="py-3.5 text-right font-medium text-accent"
                       title={
@@ -690,7 +702,7 @@ function Reports() {
                       className="py-3.5 text-right font-bold text-success"
                       title={
                         r.saldoAkhir !== null
-                          ? `Rumus Saldo Akhir: Kas Fisik (${rupiah(r.shift.final_physical_balance)}) + Bank (${rupiah(r.bankFinal)}) + Settlement (${rupiah(r.shift.settlement_amount)}) + Pengeluaran (${rupiah(r.shift.total_expenses)})`
+                          ? `Rumus Saldo Akhir: Kas Fisik (${rupiah(r.shift.final_physical_balance)}) + Bank (${rupiah(r.bankFinal)}) + Settlement (${rupiah(r.shift.settlement_amount)}) + Pengeluaran (${rupiah(r.shift.total_expenses)}) + Tarik Owner (${rupiah(r.shift.owner_withdrawal)})`
                           : "Shift belum ditutup"
                       }
                     >
@@ -803,6 +815,7 @@ function Reports() {
                   </td>
                   <td className="py-3.5 text-right text-cash">{rupiah(totalDeposit)}</td>
                   <td colSpan={2} />
+                  <td className="py-3.5 text-right text-cash">{rupiah(totalWithdrawal)}</td>
                   <td className="py-3.5 text-right text-accent">{rupiah(totalPpobUsed)}</td>
                   <td />
                   <td
@@ -1002,8 +1015,8 @@ function RejectReportDialog({
               <span className="num font-semibold">{rupiah(shift.deposit)}</span>
             </div>
             <p className="text-muted-foreground">
-              Saldo tunai akhir, saldo bank/PPOB akhir, pengeluaran, setoran, dan settlement
-              dikosongkan.
+              Saldo tunai akhir, saldo bank/PPOB akhir, pengeluaran, setoran, settlement, dan
+              penarikan owner dikosongkan.
               {shift.depositConfirmed
                 ? " Konfirmasi setoran ikut dibatalkan — setoran perlu dikonfirmasi ulang setelah kasir menutup shift lagi."
                 : ""}{" "}

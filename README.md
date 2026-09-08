@@ -78,6 +78,8 @@ Permintaan Top-up Saldo: Dokumentasi kebutuhan dana digital untuk shift berikutn
 
 Pengeluaran (Expenses): Catatan biaya operasional yang diambil dari kas (misal: listrik, parkir, bensin).
 
+Penarikan Owner (Owner Withdrawal): Uang yang dibawa keluar oleh pemilik selama shift. Ini perpindahan aset ke pemilik, bukan biaya — masuk ke rumus Saldo Akhir (Kas + Bank + Settlement + Pengeluaran + Penarikan Owner) agar laba tidak seolah rugi, dan agar Pengeluaran tidak dijadikan tempat penarikan dana.
+
 Detail Saldo Mesin (Bank): Kasir menginput sisa saldo aplikasi/rekening pada bank berikut:
 
 Bank

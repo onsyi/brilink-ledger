@@ -27,6 +27,7 @@ export type RejectedSnapshot = {
   topup_request?: number | string | null;
   deposit_amount?: number | string | null;
   settlement_amount?: number | string | null;
+  owner_withdrawal?: number | string | null;
   bank?: Record<string, number | string> | null;
   ppob?: Record<string, number | string> | null;
 };

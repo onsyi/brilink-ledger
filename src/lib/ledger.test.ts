@@ -12,6 +12,7 @@ import {
   fsSetoran,
   fbi,
   summarize,
+  type LedgerTxn,
 } from "./ledger";
 
 describe("BRILink Ledger Accounting Audit Tests", () => {
@@ -291,6 +292,20 @@ describe("BRILink Ledger Accounting Audit Tests", () => {
 
       // Rumus FS: Setoran x 15%
       assert.equal(fsSetoran(deposit), 905100);
+    });
+
+    it("should include owner withdrawal in Saldo Akhir without touching laba semantics", () => {
+      // Uang yang ditarik owner adalah perpindahan aset, bukan biaya —
+      // ikut dihitung di Saldo Akhir agar tidak lagi menumpang "Pengeluaran".
+      const base = {
+        finalPhysical: 9_000_000,
+        bankFinals: [21_553_834],
+        settlement: 685_000,
+        expenses: 200_000,
+      };
+      assert.equal(saldoAkhir(base), 31_438_834);
+      assert.equal(saldoAkhir({ ...base, ownerWithdrawal: 37_500_000 }), 68_938_834);
+      assert.equal(saldoAkhir({ ...base, ownerWithdrawal: 0 }), saldoAkhir(base));
     });
   });
 });

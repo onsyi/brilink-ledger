@@ -40,7 +40,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       let query = supabase
         .from("shifts")
         .select(
-          "id, user_id, start_time, end_time, initial_physical_balance, final_physical_balance, total_expenses, expense_notes, deposit_amount, topup_request, settlement_amount, status, branch_id, modal_awal, modal_akhir, additional_capital, rejected_at, rejection_reason",
+          "id, user_id, start_time, end_time, initial_physical_balance, final_physical_balance, total_expenses, expense_notes, deposit_amount, topup_request, settlement_amount, owner_withdrawal, status, branch_id, modal_awal, modal_akhir, additional_capital, rejected_at, rejection_reason",
         )
         .order("start_time", { ascending: false })
         .limit(60);
@@ -114,6 +114,7 @@ export function OwnerOverview({ username }: { username?: string | null }) {
                 bankFinals: [bankFinalTotal],
                 settlement: num(s.settlement_amount),
                 expenses: num(s.total_expenses),
+                ownerWithdrawal: num(s.owner_withdrawal),
               });
         const laba =
           rowSaldoAkhir !== null
