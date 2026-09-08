@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   PlayCircle,
@@ -13,14 +13,25 @@ import {
   Pencil,
   XCircle,
   Undo2,
+  Receipt,
+  Plus,
+  Trash2,
+  HandCoins,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/MoneyInput";
 import { OwnerOverview } from "@/components/OwnerOverview";
-import { BANKS, modalAwal, num, PPOB_PROVIDERS, rupiah } from "@/lib/ledger";
-import { openShiftQuery, type OpenShiftRow } from "@/lib/queries";
+import { BANKS, modalAwal, num, PPOB_PROVIDERS, rupiah, summarize } from "@/lib/ledger";
+import {
+  openShiftQuery,
+  pendingReceivablesQuery,
+  txnsQuery,
+  type OpenShiftRow,
+} from "@/lib/queries";
 import { QueryError } from "@/components/QueryError";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -647,6 +658,9 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: OpenShif
         </section>
       )}
 
+      <TransactionPanel shiftId={shiftId} />
+      <ReceivablesPanel userId={shift.user_id} />
+
       {showCancel && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
@@ -722,5 +736,471 @@ function OpeningList({
         ))}
       </ul>
     </div>
+  );
+}
+
+type TxnType = "tarik_tunai" | "setor_tunai" | "transfer" | "ppob";
+
+const TYPE_LABEL: Record<TxnType, string> = {
+  tarik_tunai: "Tarik Tunai",
+  setor_tunai: "Setor Tunai",
+  transfer: "Transfer",
+  ppob: "PPOB",
+};
+
+/** Preset pergerakan akun per jenis — contoh README: Tarik Tunai = digital → kas fisik. */
+const TYPE_PRESET: Record<TxnType, { source: string; dest: string }> = {
+  tarik_tunai: { source: "BRI D", dest: "kas_fisik" },
+  setor_tunai: { source: "kas_fisik", dest: "BRI D" },
+  transfer: { source: "BRI D", dest: "Link" },
+  ppob: { source: "Digipost", dest: "kas_fisik" },
+};
+
+const ACCOUNT_GROUPS: { label: string; options: { value: string; label: string }[] }[] = [
+  { label: "Kas", options: [{ value: "kas_fisik", label: "Kas Fisik" }] },
+  { label: "Bank", options: BANKS.map((b) => ({ value: b, label: b })) },
+  { label: "PPOB", options: PPOB_PROVIDERS.map((p) => ({ value: p, label: p })) },
+];
+
+const accountLabel = (a: string) => (a === "kas_fisik" ? "Kas Fisik" : a);
+
+const txnSelectCls =
+  "h-10 w-full rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
+
+function TransactionPanel({ shiftId }: { shiftId: string }) {
+  const queryClient = useQueryClient();
+  const txns = useQuery(txnsQuery(shiftId));
+  const [type, setType] = useState<TxnType>("tarik_tunai");
+  const [source, setSource] = useState<string>(TYPE_PRESET.tarik_tunai.source);
+  const [dest, setDest] = useState<string>(TYPE_PRESET.tarik_tunai.dest);
+  const [principal, setPrincipal] = useState("");
+  const [fee, setFee] = useState("");
+  const [cost, setCost] = useState("");
+  const [note, setNote] = useState("");
+  const [isDebt, setIsDebt] = useState(false);
+  const [debtor, setDebtor] = useState("");
+  const [debtAmount, setDebtAmount] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  // Idempotency: satu client_ref per entri, dibuat ulang setelah tersimpan —
+  // klik ganda/retry tidak menduplikasi baris (unique index shift_id+client_ref).
+  const clientRef = useRef(crypto.randomUUID());
+
+  const summary = useMemo(() => summarize(txns.data ?? []), [txns.data]);
+
+  const changeType = (t: TxnType) => {
+    setType(t);
+    setSource(TYPE_PRESET[t].source);
+    setDest(TYPE_PRESET[t].dest);
+  };
+
+  const resetInputs = () => {
+    setPrincipal("");
+    setFee("");
+    setCost("");
+    setNote("");
+    setIsDebt(false);
+    setDebtor("");
+    setDebtAmount("");
+    setDueDate("");
+  };
+
+  const add = useMutation({
+    mutationFn: async () => {
+      if (source === dest) throw new Error("Akun sumber dan tujuan tidak boleh sama");
+      if (num(principal) <= 0) throw new Error("Nominal pokok wajib diisi");
+      if (num(fee) < 0 || num(cost) < 0) throw new Error("Fee dan biaya tidak boleh negatif");
+      if (isDebt && !debtor.trim()) throw new Error("Nama customer piutang wajib diisi");
+      const { data, error } = await supabase
+        .from("transactions")
+        .insert({
+          shift_id: shiftId,
+          transaction_type: type,
+          source_account: source,
+          destination_account: dest,
+          principal_amount: num(principal),
+          customer_fee: num(fee),
+          provider_cost: num(cost),
+          note: note.trim() || null,
+          client_ref: clientRef.current,
+        })
+        .select("id")
+        .single();
+      if (error) {
+        // Idempotency: baris dengan client_ref sama sudah ada — bukan error bagi kasir.
+        if ((error as { code?: string }).code === "23505") return { duplicate: true as const };
+        throw error;
+      }
+      if (isDebt) {
+        const { error: recvErr } = await supabase.from("receivables").insert({
+          transaction_id: data.id,
+          shift_id: shiftId,
+          customer_name: debtor.trim(),
+          debt_amount: num(debtAmount) > 0 ? num(debtAmount) : num(principal),
+          due_date: dueDate || null,
+        });
+        if (recvErr)
+          throw new Error(
+            `Transaksi tersimpan, tapi piutang gagal dicatat: ${recvErr.message}. Lapor ke owner untuk dicatat manual.`,
+          );
+      }
+      return { duplicate: false as const };
+    },
+    onSuccess: (res) => {
+      toast.success(
+        res.duplicate ? "Transaksi ini sudah tersimpan — tidak diduplikasi" : "Transaksi tercatat",
+      );
+      resetInputs();
+      clientRef.current = crypto.randomUUID();
+      queryClient.invalidateQueries({ queryKey: ["txns", shiftId] });
+      queryClient.invalidateQueries({ queryKey: ["pending-receivables"] });
+      queryClient.invalidateQueries({ queryKey: ["owner-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["shift-reports"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("id", id)
+        .eq("shift_id", shiftId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Transaksi dihapus");
+      queryClient.invalidateQueries({ queryKey: ["txns", shiftId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <section className="glass-card space-y-5 p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 shadow-[0_0_15px_-3px] shadow-primary/20">
+          <Receipt className="size-4 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-base font-bold">Catat Transaksi</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Tarik/setor tunai, transfer, dan PPOB — pergerakan dua kantong uang per transaksi.
+          </p>
+        </div>
+      </div>
+
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          add.mutate();
+        }}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">Jenis transaksi</Label>
+            <select
+              value={type}
+              onChange={(e) => changeType(e.target.value as TxnType)}
+              className={txnSelectCls}
+            >
+              {(Object.keys(TYPE_LABEL) as TxnType[]).map((t) => (
+                <option key={t} value={t}>
+                  {TYPE_LABEL[t]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">Catatan (opsional)</Label>
+            <Input
+              value={note}
+              maxLength={200}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Contoh: A/N Budi, token 100rb"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">Akun sumber</Label>
+            <select
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              className={txnSelectCls}
+            >
+              {ACCOUNT_GROUPS.map((g) => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.options.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">Akun tujuan</Label>
+            <select value={dest} onChange={(e) => setDest(e.target.value)} className={txnSelectCls}>
+              {ACCOUNT_GROUPS.map((g) => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.options.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <MoneyInput
+            id="txn-principal"
+            label="Nominal pokok"
+            value={principal}
+            onChange={setPrincipal}
+            required
+          />
+          <MoneyInput id="txn-fee" label="Fee admin pelanggan" value={fee} onChange={setFee} />
+          <MoneyInput id="txn-cost" label="Biaya provider" value={cost} onChange={setCost} />
+        </div>
+
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={isDebt}
+            onChange={(e) => setIsDebt(e.target.checked)}
+            className="accent-primary size-4"
+          />
+          Buat piutang (customer bayar nanti)
+        </label>
+
+        {isDebt && (
+          <div className="grid gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">Nama customer</Label>
+              <Input
+                value={debtor}
+                maxLength={100}
+                onChange={(e) => setDebtor(e.target.value)}
+                placeholder="Nama pembeli"
+              />
+            </div>
+            <MoneyInput
+              id="debt-amount"
+              label="Nominal piutang"
+              value={debtAmount}
+              onChange={setDebtAmount}
+              hint="Kosong = sama dengan nominal pokok"
+            />
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">Janji bayar</Label>
+              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </div>
+          </div>
+        )}
+
+        <Button type="submit" size="sm" disabled={add.isPending}>
+          {add.isPending ? (
+            <Loader2 className="mr-2 size-4 animate-spin" />
+          ) : (
+            <Plus className="mr-1.5 size-4" />
+          )}
+          Simpan transaksi
+        </Button>
+      </form>
+
+      <div className="border-t border-border/40 pt-4">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
+          <span className="text-muted-foreground">
+            Transaksi: <b className="num text-foreground">{summary.count}</b>
+          </span>
+          <span className="text-muted-foreground">
+            Kas masuk: <b className="num text-success">{rupiah(summary.cashIn)}</b>
+          </span>
+          <span className="text-muted-foreground">
+            Kas keluar: <b className="num text-destructive">{rupiah(summary.cashOut)}</b>
+          </span>
+          <span className="text-muted-foreground">
+            Net kas: <b className="num text-foreground">{rupiah(summary.cashNet)}</b>
+          </span>
+          <span className="text-muted-foreground">
+            Laba bersih: <b className="num text-success">{rupiah(summary.profit)}</b>
+          </span>
+        </div>
+
+        {txns.isError ? (
+          <div className="mt-3">
+            <QueryError onRetry={() => txns.refetch()} />
+          </div>
+        ) : txns.isPending ? (
+          <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Memuat…
+          </p>
+        ) : (txns.data ?? []).length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">Belum ada transaksi di shift ini.</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto hide-scrollbar">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead>
+                <tr className="border-b border-border/60 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                  <th className="pb-2">Waktu</th>
+                  <th className="pb-2">Jenis</th>
+                  <th className="pb-2">Pergerakan</th>
+                  <th className="pb-2 text-right">Pokok</th>
+                  <th className="pb-2 text-right">Fee</th>
+                  <th className="pb-2 text-right">Biaya</th>
+                  <th className="pb-2 text-right">Laba</th>
+                  <th className="pb-2" />
+                </tr>
+              </thead>
+              <tbody className="num">
+                {(txns.data ?? []).map((t) => (
+                  <tr key={t.id} className="border-b border-border/30 hover:bg-secondary/30">
+                    <td className="py-2 text-xs">
+                      {new Date(t.created_at).toLocaleTimeString("id-ID", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </td>
+                    <td className="py-2 text-xs font-semibold">
+                      {TYPE_LABEL[t.transaction_type as TxnType] ?? t.transaction_type}
+                    </td>
+                    <td className="py-2 text-xs text-muted-foreground">
+                      {accountLabel(t.source_account)} → {accountLabel(t.destination_account)}
+                      {t.note ? ` · ${t.note}` : ""}
+                    </td>
+                    <td className="py-2 text-right">{rupiah(t.principal_amount)}</td>
+                    <td className="py-2 text-right text-success">{rupiah(t.customer_fee)}</td>
+                    <td className="py-2 text-right text-destructive">{rupiah(t.provider_cost)}</td>
+                    <td className="py-2 text-right font-semibold">{rupiah(num(t.profit_net))}</td>
+                    <td className="py-2 text-right">
+                      <button
+                        onClick={() => remove.mutate(t.id)}
+                        disabled={remove.isPending}
+                        title="Hapus (salah input) — hanya selama shift terbuka"
+                        className="inline-flex items-center rounded-lg border border-destructive/30 px-1.5 py-1 text-destructive transition-colors hover:bg-destructive/10"
+                      >
+                        <Trash2 className="size-3" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Piutang belum lunas milik kasir — lintas shift: pelunasan sah kapan pun
+ * (RLS recv_update memakai shift_is_readable), tapi nominal terkunci setelah
+ * shift pembukanya ditutup.
+ */
+function ReceivablesPanel({ userId }: { userId: string }) {
+  const queryClient = useQueryClient();
+  const pend = useQuery(pendingReceivablesQuery(userId));
+
+  const markPaid = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("receivables")
+        .update({ status: "paid" })
+        .eq("id", id)
+        .eq("status", "pending");
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Piutang ditandai lunas");
+      queryClient.invalidateQueries({ queryKey: ["pending-receivables"] });
+      queryClient.invalidateQueries({ queryKey: ["shift-reports"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const rows = pend.data ?? [];
+  const total = rows.reduce((s, r) => s + num(r.debt_amount), 0);
+  const today = new Date().toISOString().slice(0, 10);
+
+  return (
+    <section className="glass-card p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-warning/15">
+          <HandCoins className="size-4 text-warning" />
+        </div>
+        <div>
+          <h2 className="text-base font-bold">Piutang Belum Lunas</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Modal kerja yang tertahan di pelanggan — tandai lunas saat uangnya diterima.
+          </p>
+        </div>
+      </div>
+
+      {pend.isError ? (
+        <div className="mt-4">
+          <QueryError onRetry={() => pend.refetch()} />
+        </div>
+      ) : pend.isPending ? (
+        <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Memuat…
+        </p>
+      ) : rows.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">Tidak ada piutang menunggu.</p>
+      ) : (
+        <>
+          <p className="num mt-4 text-lg font-bold text-warning">
+            Total: {rupiah(total)} · {rows.length} piutang
+          </p>
+          <ul className="mt-3 space-y-2">
+            {rows.map((r) => {
+              const overdue = !!r.due_date && r.due_date < today;
+              return (
+                <li
+                  key={r.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/40 bg-secondary/20 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">
+                      {r.customer_name}
+                      {overdue && (
+                        <span className="ml-2 inline-flex items-center rounded-full border border-destructive/30 bg-destructive/15 px-1.5 py-0.5 text-[9px] font-bold text-destructive">
+                          lewat tempo
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {r.due_date
+                        ? `Janji bayar ${new Date(r.due_date).toLocaleDateString("id-ID")}`
+                        : "Tanpa tanggal janji"}
+                      {r.shift_start_time
+                        ? ` · shift ${new Date(r.shift_start_time).toLocaleDateString("id-ID")}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="num text-sm font-bold">{rupiah(r.debt_amount)}</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={markPaid.isPending}
+                      onClick={() => markPaid.mutate(r.id)}
+                    >
+                      Tandai lunas
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </section>
   );
 }

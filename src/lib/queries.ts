@@ -61,3 +61,73 @@ export function openShiftQuery(userId: string | undefined, enabled: boolean) {
     },
   };
 }
+
+export type TxnRow = {
+  id: string;
+  shift_id: string;
+  transaction_type: string;
+  source_account: string;
+  destination_account: string;
+  principal_amount: number | string;
+  customer_fee: number | string;
+  provider_cost: number | string;
+  profit_net: number | string | null;
+  note: string | null;
+  client_ref: string | null;
+  created_at: string;
+};
+
+export function txnsQuery(shiftId: string | undefined) {
+  return {
+    queryKey: ["txns", shiftId] as const,
+    enabled: !!shiftId,
+    queryFn: async (): Promise<TxnRow[]> => {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("shift_id", shiftId!)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return data as TxnRow[];
+    },
+  };
+}
+
+export type ReceivableRow = {
+  id: string;
+  transaction_id: string | null;
+  shift_id: string;
+  customer_name: string;
+  debt_amount: number | string;
+  due_date: string | null;
+  status: string;
+  created_at: string;
+  shift_start_time?: string | null;
+};
+
+/**
+ * Piutang yang belum lunas milik kasir — lintas shift, karena pelunasan bisa
+ * terjadi jauh setelah shift dibukanya ditutup (RLS recv_update memakai
+ * shift_is_readable, bukan writable, persis untuk alur ini).
+ */
+export function pendingReceivablesQuery(userId: string | undefined) {
+  return {
+    queryKey: ["pending-receivables", userId] as const,
+    enabled: !!userId,
+    queryFn: async (): Promise<ReceivableRow[]> => {
+      const { data, error } = await supabase
+        .from("receivables")
+        .select(
+          "id, transaction_id, shift_id, customer_name, debt_amount, due_date, status, created_at, shifts!inner(start_time)",
+        )
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return (data as Array<ReceivableRow & { shifts: { start_time: string } | null }>).map(
+        (r) => ({ ...r, shift_start_time: r.shifts?.start_time ?? null }),
+      );
+    },
+  };
+}
