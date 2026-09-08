@@ -460,6 +460,15 @@ export type Database = {
         };
         Returns: undefined;
       };
+      owner_adjust_shift_field: {
+        Args: {
+          _shift_id: string;
+          _field: string;
+          _new_value: number;
+          _reason: string;
+        };
+        Returns: undefined;
+      };
       owner_reject_shift_report: {
         Args: {
           _shift_id: string;

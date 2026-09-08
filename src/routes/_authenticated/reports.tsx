@@ -33,6 +33,15 @@ import {
   saldoAwal,
 } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
+
+const SHIFT_FIELDS = [
+  { key: "total_expenses", label: "Pengeluaran" },
+  { key: "settlement_amount", label: "Settlement" },
+  { key: "owner_withdrawal", label: "Tarik Owner" },
+  { key: "final_physical_balance", label: "Kas Fisik Akhir" },
+  { key: "additional_capital", label: "Modal Tambahan" },
+] as const;
+
 import { QueryError } from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1072,16 +1081,17 @@ function BalanceAuditDialog({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [kind, setKind] = useState<"bank" | "ppob">("bank");
+  const [kind, setKind] = useState<"bank" | "ppob" | "shift">("bank");
   const [name, setName] = useState<string>(BANKS[0]);
   const [field, setField] = useState<"initial" | "final">("final");
+  const [shiftField, setShiftField] = useState<string>(SHIFT_FIELDS[0].key);
   const [value, setValue] = useState("");
   const [reason, setReason] = useState("");
 
   const balances = useQuery({
     queryKey: ["audit-balances", shift.id],
     queryFn: async () => {
-      const [bankRes, ppobRes] = await Promise.all([
+      const [bankRes, ppobRes, shiftRes] = await Promise.all([
         supabase
           .from("bank_balances")
           .select("bank_name, initial_amount, final_amount")
@@ -1090,6 +1100,13 @@ function BalanceAuditDialog({
           .from("ppob_balances")
           .select("provider_name, initial_amount, final_amount")
           .eq("shift_id", shift.id),
+        supabase
+          .from("shifts")
+          .select(
+            "total_expenses, settlement_amount, owner_withdrawal, final_physical_balance, additional_capital",
+          )
+          .eq("id", shift.id)
+          .single(),
       ]);
       if (bankRes.error) throw bankRes.error;
       if (ppobRes.error) throw ppobRes.error;
@@ -1106,31 +1123,51 @@ function BalanceAuditDialog({
           final: num(p.final_amount),
         }),
       );
-      return map;
+      return { bankPpob: map, shiftRow: shiftRes.data };
     },
   });
 
-  const options = kind === "bank" ? BANKS : PPOB_PROVIDERS;
-  const current = balances.data?.get(`${kind}:${name}`);
-  const currentValue = field === "initial" ? (current?.initial ?? 0) : (current?.final ?? 0);
+  const options =
+    kind === "bank"
+      ? [...BANKS]
+      : kind === "ppob"
+        ? [...PPOB_PROVIDERS]
+        : SHIFT_FIELDS.map((f) => f.key);
+  const current = kind === "shift" ? undefined : balances.data?.bankPpob.get(`${kind}:${name}`);
+  const currentValue =
+    kind === "shift"
+      ? num(balances.data?.shiftRow?.[shiftField as keyof typeof balances.data.shiftRow] ?? 0)
+      : field === "initial"
+        ? (current?.initial ?? 0)
+        : (current?.final ?? 0);
 
   const save = useMutation({
     mutationFn: async () => {
       if (value === "") throw new Error("Nilai baru wajib diisi");
       if (reason.trim().length < 5)
         throw new Error("Alasan audit wajib diisi (minimal 5 karakter)");
-      const { error } = await supabase.rpc("owner_adjust_balance", {
-        _shift_id: shift.id,
-        _kind: kind,
-        _name: name,
-        _field: field,
-        _new_value: Number(value),
-        _reason: reason.trim(),
-      });
-      if (error) throw error;
+      if (kind === "shift") {
+        const { error } = await supabase.rpc("owner_adjust_shift_field", {
+          _shift_id: shift.id,
+          _field: shiftField,
+          _new_value: Number(value),
+          _reason: reason.trim(),
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.rpc("owner_adjust_balance", {
+          _shift_id: shift.id,
+          _kind: kind,
+          _name: name,
+          _field: field,
+          _new_value: Number(value),
+          _reason: reason.trim(),
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
-      toast.success("Saldo dikoreksi dan tercatat di riwayat audit");
+      toast.success("Koreksi tercatat di riwayat audit");
       queryClient.invalidateQueries({ queryKey: ["shift-reports"] });
       queryClient.invalidateQueries({ queryKey: ["shift-amendments"] });
       queryClient.invalidateQueries({ queryKey: ["owner-overview"] });
@@ -1148,7 +1185,7 @@ function BalanceAuditDialog({
       <DialogContent className="glass-card">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-display text-xl font-bold">
-            <ScanLine className="size-5 text-primary" /> Audit Saldo Rekening
+            <ScanLine className="size-5 text-primary" /> Audit Angka Penutupan
           </DialogTitle>
           <DialogDescription>
             Shift <span className="font-medium">{shift.cashier}</span> ·{" "}
@@ -1168,46 +1205,64 @@ function BalanceAuditDialog({
                 value={kind}
                 className={selectClass}
                 onChange={(e) => {
-                  const k = e.target.value as "bank" | "ppob";
+                  const k = e.target.value as "bank" | "ppob" | "shift";
                   setKind(k);
-                  setName(k === "bank" ? BANKS[0] : PPOB_PROVIDERS[0]);
+                  setName(
+                    k === "bank"
+                      ? BANKS[0]
+                      : k === "ppob"
+                        ? PPOB_PROVIDERS[0]
+                        : SHIFT_FIELDS[0].key,
+                  );
                 }}
               >
                 <option value="bank">Bank</option>
                 <option value="ppob">PPOB</option>
+                <option value="shift">Angka Penutupan (Shift)</option>
               </select>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="audit-name" className="text-xs text-muted-foreground">
-                Akun
+                {kind === "shift" ? "Kolom" : "Akun"}
               </Label>
               <select
                 id="audit-name"
-                value={name}
+                value={kind === "shift" ? shiftField : name}
                 className={selectClass}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  if (kind === "shift") {
+                    setShiftField(e.target.value);
+                  } else {
+                    setName(e.target.value);
+                  }
+                }}
               >
-                {options.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
+                {(kind === "shift"
+                  ? SHIFT_FIELDS.map((f) => ({ value: f.key, label: f.label }))
+                  : options.map((o) => ({ value: o, label: o }))
+                ).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="audit-field" className="text-xs text-muted-foreground">
-                Kolom
-              </Label>
-              <select
-                id="audit-field"
-                value={field}
-                className={selectClass}
-                onChange={(e) => setField(e.target.value as "initial" | "final")}
-              >
-                <option value="initial">Saldo Awal</option>
-                <option value="final">Saldo Akhir</option>
-              </select>
-            </div>
+            {kind !== "shift" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="audit-field" className="text-xs text-muted-foreground">
+                  Kolom
+                </Label>
+                <select
+                  id="audit-field"
+                  value={field}
+                  className={selectClass}
+                  onChange={(e) => setField(e.target.value as "initial" | "final")}
+                >
+                  <option value="initial">Saldo Awal</option>
+                  <option value="final">Saldo Akhir</option>
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-between rounded-lg border border-border/60 bg-secondary/30 px-3 py-2.5">
