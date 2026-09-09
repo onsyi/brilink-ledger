@@ -115,7 +115,7 @@ export function saldoAwal(opts: {
 
 /**
  * Rumus Saldo Akhir:
- * Saldo uang Fisik tutup kasir + Saldo rekening Bank tutup kasir + settlement + Pengeluaran + Penarikan Owner
+ * Saldo uang Fisik tutup kasir + Saldo rekening Bank tutup kasir + settlement + Pengeluaran
  * Tidak bisa ditambahkan dengan PPOB karena masing-masing berdiri sendiri.
  */
 export function saldoAkhir(opts: {
@@ -123,16 +123,9 @@ export function saldoAkhir(opts: {
   bankFinals: number[];
   settlement?: number;
   expenses?: number;
-  ownerWithdrawal?: number;
 }) {
   const bankTotal = opts.bankFinals.reduce((s, n) => s + num(n), 0);
-  return (
-    num(opts.finalPhysical) +
-    bankTotal +
-    num(opts.settlement) +
-    num(opts.expenses) +
-    num(opts.ownerWithdrawal)
-  );
+  return num(opts.finalPhysical) + bankTotal + num(opts.settlement) + num(opts.expenses);
 }
 
 /**
@@ -168,14 +161,12 @@ export function modalAkhir(opts: {
   ppobFinals?: number[];
   settlement?: number;
   expenses?: number;
-  ownerWithdrawal?: number;
 }) {
   return saldoAkhir({
     finalPhysical: opts.finalPhysical,
     bankFinals: opts.bankFinals,
     settlement: opts.settlement ?? 0,
     expenses: opts.expenses ?? 0,
-    ownerWithdrawal: opts.ownerWithdrawal ?? 0,
   });
 }
 
