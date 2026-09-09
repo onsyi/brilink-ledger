@@ -83,7 +83,11 @@ function CloseShift() {
     for (const b of BANKS) bankMap[b] = money(rejectedSnapshot.bank?.[b]);
     const ppobMap: Record<string, string> = {};
     for (const p of PPOB_PROVIDERS) ppobMap[p] = money(rejectedSnapshot.ppob?.[p]);
-    setFinalCash(money(rejectedSnapshot.final_physical_balance));
+    setFinalCash(
+      rejectedSnapshot.final_physical_balance != null
+        ? String(num(rejectedSnapshot.final_physical_balance))
+        : "",
+    );
     setAdditionalCapital(money(rejectedSnapshot.additional_capital));
     setExpenses(money(rejectedSnapshot.total_expenses));
     setExpenseNotes(rejectedSnapshot.expense_notes ?? "");
@@ -103,9 +107,17 @@ function CloseShift() {
       if (finalCash === "") throw new Error("Saldo Tunai Akhir Tutup Kasir wajib diisi");
       if (Number(finalCash) < 0)
         throw new Error("Saldo Tunai Akhir Tutup Kasir tidak boleh negatif");
+      if (Number(expenses || 0) < 0) throw new Error("Pengeluaran tidak boleh negatif");
+      if (Number(topup || 0) < 0) throw new Error("Penambahan saldo PPOB tidak boleh negatif");
       if (Number(deposit || 0) < 0) throw new Error("Setoran tidak boleh negatif");
       if (Number(settlement || 0) < 0) throw new Error("Settlement tidak boleh negatif");
       if (Number(additionalCapital || 0) < 0) throw new Error("Modal tambahan tidak boleh negatif");
+      for (const b of BANKS) {
+        if (Number(banks[b] || 0) < 0) throw new Error(`Saldo akhir ${b} tidak boleh negatif`);
+      }
+      for (const p of PPOB_PROVIDERS) {
+        if (Number(ppob[p] || 0) < 0) throw new Error(`Saldo akhir ${p} tidak boleh negatif`);
+      }
       // Setoran sengaja tidak dibandingkan dengan saldo fisik akhir: kasir
       // menyerahkan uang ke owner lebih dulu, lalu menghitung sisa di laci, jadi
       // setoran memang normal lebih besar dari saldo akhir.

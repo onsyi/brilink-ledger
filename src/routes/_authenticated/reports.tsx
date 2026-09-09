@@ -39,6 +39,7 @@ const SHIFT_FIELDS = [
   { key: "settlement_amount", label: "Settlement" },
   { key: "final_physical_balance", label: "Kas Fisik Akhir" },
   { key: "additional_capital", label: "Modal Tambahan" },
+  { key: "deposit_amount", label: "Setoran" },
 ] as const;
 
 import { QueryError } from "@/components/QueryError";
@@ -1089,7 +1090,9 @@ function BalanceAuditDialog({
           .eq("shift_id", shift.id),
         supabase
           .from("shifts")
-          .select("total_expenses, settlement_amount, final_physical_balance, additional_capital")
+          .select(
+            "total_expenses, settlement_amount, final_physical_balance, additional_capital, deposit_amount",
+          )
           .eq("id", shift.id)
           .single(),
       ]);
@@ -1156,6 +1159,7 @@ function BalanceAuditDialog({
       queryClient.invalidateQueries({ queryKey: ["shift-reports"] });
       queryClient.invalidateQueries({ queryKey: ["shift-amendments"] });
       queryClient.invalidateQueries({ queryKey: ["owner-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["deposit-shifts"] });
       queryClient.invalidateQueries({ queryKey: ["audit-balances", shift.id] });
       onClose();
     },

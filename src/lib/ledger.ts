@@ -182,8 +182,6 @@ export function labaFee(opts: {
   expenses: number;
   settlement: number;
   additionalCapital: number;
-  deposit?: number;
-  topup?: number;
 }) {
   const awal = saldoAwal({
     initialPhysical: opts.initialPhysical,

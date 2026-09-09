@@ -37,6 +37,11 @@ DECLARE
   _shift_id uuid := '7c2ca5ee-8aa1-4bfc-bc42-aac6cdd1f5aa';
   _owner    uuid := '2895ff49-1a77-43b3-8af5-6a49bd9bd416';
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.shifts WHERE id = _shift_id)
+     OR NOT EXISTS (SELECT 1 FROM auth.users WHERE id = _owner) THEN
+    RETURN;
+  END IF;
+
   PERFORM set_config('brilink.audit_override', 'on', true);
 
   UPDATE public.bank_balances SET final_amount = v.a

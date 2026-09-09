@@ -141,6 +141,20 @@ function OpenShiftPanel({
 
   const openShift = useMutation({
     mutationFn: async () => {
+      if (Number(initial || 0) < 0) {
+        throw new Error("Saldo Tunai Awal Buka Kasir tidak boleh negatif");
+      }
+      for (const b of BANKS) {
+        if (Number(banks[b] || 0) < 0) {
+          throw new Error(`Saldo awal ${b} tidak boleh negatif`);
+        }
+      }
+      for (const p of PPOB_PROVIDERS) {
+        if (Number(ppob[p] || 0) < 0) {
+          throw new Error(`Saldo awal ${p} tidak boleh negatif`);
+        }
+      }
+
       const bankSnapshots = BANKS.map((b) => ({
         bank_name: b,
         initial_amount: Number(banks[b] || 0),
@@ -441,6 +455,20 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: OpenShif
 
   const amend = useMutation({
     mutationFn: async () => {
+      if (Number(initial || 0) < 0) {
+        throw new Error("Saldo Tunai Awal Buka Kasir tidak boleh negatif");
+      }
+      for (const b of BANKS) {
+        if (Number(banks[b] || 0) < 0) {
+          throw new Error(`Saldo awal ${b} tidak boleh negatif`);
+        }
+      }
+      for (const p of PPOB_PROVIDERS) {
+        if (Number(ppob[p] || 0) < 0) {
+          throw new Error(`Saldo awal ${p} tidak boleh negatif`);
+        }
+      }
+
       const { error } = await supabase.rpc("amend_open_shift", {
         _shift_id: shiftId,
         _initial_cash: Number(initial || 0),
