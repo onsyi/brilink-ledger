@@ -9,6 +9,9 @@
 
 BEGIN;
 
+-- 0. Drop old overloaded close_shift_atomic (with _owner_withdrawal param)
+DROP FUNCTION IF EXISTS public.close_shift_atomic(uuid, numeric, numeric, numeric, text, numeric, numeric, numeric, jsonb, jsonb, numeric);
+
 -- 1. close_shift_atomic: remove _owner_withdrawal from modal_akhir + store
 CREATE OR REPLACE FUNCTION public.close_shift_atomic(
   _shift_id        UUID,
