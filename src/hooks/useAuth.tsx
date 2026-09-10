@@ -53,7 +53,7 @@ export function useAuth(): AuthState {
           supabase.from("user_roles").select("role").eq("user_id", session.user.id),
           supabase
             .from("profiles")
-            .select("username, branch_id")
+            .select("username, branch_id, is_active")
             .eq("id", session.user.id)
             .maybeSingle(),
         ]);
@@ -77,14 +77,21 @@ export function useAuth(): AuthState {
         if (!active) return;
         const roles = (roleRows ?? []).map((r) => r.role as AppRole);
         const role = roles.includes("owner") ? "owner" : (roles[0] ?? null);
+        const isActive = profile?.is_active ?? true;
+
+        let authError: string | null = null;
+        if (!isActive) {
+          authError = "Akun Anda telah dinonaktifkan. Hubungi owner untuk mengaktifkan kembali.";
+        } else if (!role) {
+          authError = "Akun Anda belum memiliki role. Hubungi owner untuk mengaktifkan akses.";
+        }
+
         setState({
           loading: false,
-          error: role
-            ? null
-            : "Akun Anda belum memiliki role. Hubungi owner untuk mengaktifkan akses.",
+          error: authError,
           user: session.user,
           session,
-          role,
+          role: isActive ? role : null,
           username: profile?.username ?? session.user.email ?? null,
           branchId: profile?.branch_id ?? null,
           branchName,

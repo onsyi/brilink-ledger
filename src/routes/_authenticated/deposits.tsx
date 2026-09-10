@@ -103,6 +103,8 @@ function Deposits() {
     onSuccess: () => {
       toast.success("Setoran dikonfirmasi diterima");
       queryClient.invalidateQueries({ queryKey: ["deposit-shifts"] });
+      queryClient.invalidateQueries({ queryKey: ["shift-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["owner-overview"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });

@@ -117,12 +117,12 @@ function OpenShiftPanel({
     const bankMap: Record<string, string> = {};
     for (const b of BANKS) {
       const prevBank = prev?.banks.find((x) => x.bank_name === b);
-      bankMap[b] = prevBank ? String(num(prevBank.final_amount) || "") : "";
+      bankMap[b] = prevBank ? String(num(prevBank.final_amount)) : "";
     }
     const ppobMap: Record<string, string> = {};
     for (const p of PPOB_PROVIDERS) {
       const prevPpob = prev?.ppob.find((x) => x.provider_name === p);
-      ppobMap[p] = prevPpob ? String(num(prevPpob.final_amount) || "") : "";
+      ppobMap[p] = prevPpob ? String(num(prevPpob.final_amount)) : "";
     }
     setBanks(bankMap);
     setPpob(ppobMap);
@@ -444,10 +444,18 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: OpenShif
 
   const startEditing = () => {
     const b: Record<string, string> = {};
-    for (const name of BANKS) b[name] = String(opening.data?.bankMap[name] || "");
+    for (const name of BANKS) {
+      const val = opening.data?.bankMap[name];
+      b[name] = val != null ? String(num(val)) : "";
+    }
     const p: Record<string, string> = {};
-    for (const name of PPOB_PROVIDERS) p[name] = String(opening.data?.ppobMap[name] || "");
-    setInitial(String(num(shift.initial_physical_balance) || ""));
+    for (const name of PPOB_PROVIDERS) {
+      const val = opening.data?.ppobMap[name];
+      p[name] = val != null ? String(num(val)) : "";
+    }
+    setInitial(
+      shift.initial_physical_balance != null ? String(num(shift.initial_physical_balance)) : "",
+    );
     setBanks(b);
     setPpob(p);
     setEditing(true);

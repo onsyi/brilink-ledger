@@ -13,6 +13,7 @@ import {
   Settings,
   ShieldCheck,
   UserCircle,
+  TriangleAlert,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,7 +27,7 @@ const nav = [
   { to: "/dashboard", label: "Shift", icon: LayoutDashboard, ownerLabel: "Ringkasan" },
   { to: "/close-shift", label: "Tutup Shift", icon: ClipboardCheck, cashierOnly: true },
   { to: "/deposits", label: "Setoran", icon: Wallet },
-  { to: "/reports", label: "Laporan", icon: BarChart3, ownerOnly: true },
+  { to: "/reports", label: "Laporan", icon: BarChart3 },
   { to: "/settings", label: "Pengaturan", icon: Settings },
 ] as const;
 
@@ -191,7 +192,15 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-5 sm:py-7 lg:px-6">{children}</main>
+      <main className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-5 sm:py-7 lg:px-6">
+        {error && (
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+            <TriangleAlert className="mt-0.5 size-5 shrink-0" />
+            <div className="flex-1 font-medium">{error}</div>
+          </div>
+        )}
+        {children}
+      </main>
 
       {/* Mobile bottom nav — floating dock */}
       <nav className="fixed bottom-3 left-3 right-3 z-30 glass-card rounded-2xl shadow-[0_8px_30px_-8px_oklch(0.05_0.03_240_/_70%)] md:hidden">
