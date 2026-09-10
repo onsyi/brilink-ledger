@@ -37,3 +37,6 @@ dist-ssr
 
 .vercel
 scripts/
+
+# Temporary database reset scripts
+reset_database.sql
