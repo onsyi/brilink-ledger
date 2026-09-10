@@ -8,9 +8,8 @@ function createSupabaseClient() {
   const nodeEnv: Record<string, string | undefined> =
     typeof process !== "undefined" && process.env ? process.env : {};
 
-  const CLIENT_SUPABASE_URL = "https://lxqgsbgmvsmkqjctfkoc.supabase.co";
-  const CLIENT_SUPABASE_KEY =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx4cWdzYmdtdnNta3FqY3Rma29jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3OTU4NDUsImV4cCI6MjEwNDM3MTg0NX0.ZxBPJOX0NoTNhMBHVNuiDrA5tKFI2St2CV_hl0uiwzU";
+  const CLIENT_SUPABASE_URL = "https://blrazbccxocnhtpskjll.supabase.co";
+  const CLIENT_SUPABASE_KEY = "sb_publishable_ANNCG0Gfhqs8uAEvMnIXOg_7qEU_uff";
 
   const rawUrl = import.meta.env["VITE_SUPABASE_URL"] || nodeEnv["SUPABASE_URL"];
   const rawKey =
