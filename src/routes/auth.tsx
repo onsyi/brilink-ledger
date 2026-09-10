@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const credsSchema = z.object({
-  email: z.string().trim().email("Email tidak valid").max(255),
+  identifier: z.string().trim().min(3, "Masukkan email atau username").max(255),
   password: z.string().min(6, "Password minimal 6 karakter").max(72),
 });
 
@@ -40,15 +40,19 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (active && data.session) navigate({ to: "/dashboard", replace: true });
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (error || !data?.user) {
+        supabase.auth.signOut();
+      } else if (active && data.user) {
+        navigate({ to: "/dashboard", replace: true });
+      }
     });
     return () => {
       active = false;
@@ -60,7 +64,7 @@ function AuthPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submittingRef.current) return;
-    const parsed = credsSchema.safeParse({ email, password });
+    const parsed = credsSchema.safeParse({ identifier, password });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "Input tidak valid");
       return;
@@ -68,11 +72,26 @@ function AuthPage() {
     submittingRef.current = true;
     setBusy(true);
     try {
+      let targetEmail = parsed.data.identifier;
+      if (!targetEmail.includes("@")) {
+        const { data: resolvedEmail } = await supabase.rpc("resolve_login_email", {
+          identifier: parsed.data.identifier,
+        });
+        if (resolvedEmail && typeof resolvedEmail === "string") {
+          targetEmail = resolvedEmail;
+        }
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
-        email: parsed.data.email,
+        email: targetEmail,
         password: parsed.data.password,
       });
-      if (error) throw error;
+      if (error) {
+        if (error.message.toLowerCase().includes("invalid login credentials")) {
+          throw new Error("Email/username atau password salah.");
+        }
+        throw error;
+      }
       navigate({ to: "/dashboard", replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal masuk");
@@ -187,17 +206,17 @@ function AuthPage() {
 
             <form onSubmit={submit} className="mt-7 space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-xs font-semibold text-muted-foreground">
-                  Email
+                <Label htmlFor="identifier" className="text-xs font-semibold text-muted-foreground">
+                  Email atau Username
                 </Label>
                 <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="nama@agen.id"
+                  id="identifier"
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="owner atau nama@agen.id"
                   maxLength={255}
-                  autoComplete="email"
+                  autoComplete="username"
                   required
                   className="h-11 transition-all focus-visible:ring-primary/50"
                 />

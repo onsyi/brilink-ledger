@@ -383,6 +383,12 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      resolve_login_email: {
+        Args: {
+          identifier: string;
+        };
+        Returns: string | null;
+      };
       /** @deprecated Retired — raises an exception. Use admin_set_user_active. */
       admin_delete_user: {
         Args: {
