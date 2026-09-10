@@ -1,7 +1,16 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Trash2, Building2, CheckCircle2, XCircle } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  Pencil,
+  Trash2,
+  Building2,
+  CheckCircle2,
+  XCircle,
+  Info,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +38,7 @@ export function BranchManagement() {
   const [showAdd, setShowAdd] = useState(false);
   const [editBranch, setEditBranch] = useState<Branch | null>(null);
   const [deleteBranch, setDeleteBranch] = useState<Branch | null>(null);
+  const [deactivateBranch, setDeactivateBranch] = useState<Branch | null>(null);
 
   const branches = useQuery({
     queryKey: ["branches"],
@@ -112,6 +122,18 @@ export function BranchManagement() {
         </Button>
       </div>
 
+      <div className="flex items-start gap-2.5 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+        <Info className="size-4 shrink-0 text-primary mt-0.5" />
+        <div className="leading-relaxed">
+          <span className="font-semibold text-foreground">Panduan Keaktifan Cabang:</span> Pastikan
+          gerai yang beroperasi selalu berstatus <strong className="text-emerald-400">Aktif</strong>
+          . Jam operasional harian (pagi buka & malam tutup) diatur otomatis oleh kasir lewat menu{" "}
+          <strong className="text-foreground">Buka Shift</strong> dan{" "}
+          <strong className="text-foreground">Tutup Shift</strong>. Tombol Nonaktifkan hanya dipakai
+          bila cabang ditutup permanen atau libur panjang.
+        </div>
+      </div>
+
       {!branches.data || branches.data.length === 0 ? (
         <div className="rounded-2xl border border-border/40 bg-secondary/20 py-8 text-center text-sm text-muted-foreground">
           Belum ada cabang. Tambah cabang untuk memulai organisasi.
@@ -167,7 +189,13 @@ export function BranchManagement() {
                   size="sm"
                   variant={b.is_active ? "outline" : "default"}
                   disabled={toggleActive.isPending}
-                  onClick={() => toggleActive.mutate({ id: b.id, is_active: !b.is_active })}
+                  onClick={() => {
+                    if (b.is_active) {
+                      setDeactivateBranch(b);
+                    } else {
+                      toggleActive.mutate({ id: b.id, is_active: true });
+                    }
+                  }}
                   className="text-xs"
                 >
                   {b.is_active ? "Nonaktifkan" : "Aktifkan"}
@@ -214,6 +242,49 @@ export function BranchManagement() {
               >
                 {deleteMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
                 Hapus Cabang
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {deactivateBranch && (
+        <Dialog open onOpenChange={() => setDeactivateBranch(null)}>
+          <DialogContent className="glass-card">
+            <DialogHeader>
+              <DialogTitle className="font-display text-xl font-bold">
+                Nonaktifkan Cabang?
+              </DialogTitle>
+              <DialogDescription className="space-y-3 pt-2 text-sm text-muted-foreground">
+                <p>
+                  Anda akan menonaktifkan cabang{" "}
+                  <strong className="text-foreground">{deactivateBranch.name}</strong>.
+                </p>
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 leading-relaxed">
+                  ⚠️ <strong>Perhatian:</strong> Jika dinonaktifkan, kasir tidak akan bisa membuka
+                  shift baru di cabang ini. Jam buka/tutup toko harian diatur otomatis oleh kasir
+                  via <strong>Buka Shift</strong> dan <strong>Tutup Shift</strong>.
+                </div>
+                <p className="text-xs">
+                  Hanya nonaktifkan cabang jika gerai ini tutup permanen atau libur operasional
+                  jangka panjang.
+                </p>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => setDeactivateBranch(null)}>
+                Batal
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  toggleActive.mutate({ id: deactivateBranch.id, is_active: false });
+                  setDeactivateBranch(null);
+                }}
+                disabled={toggleActive.isPending}
+              >
+                {toggleActive.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                Ya, Nonaktifkan Cabang
               </Button>
             </DialogFooter>
           </DialogContent>
