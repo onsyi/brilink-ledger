@@ -37,6 +37,7 @@ export function useRealtimeRefresh(queryClient: QueryClient) {
             ["owner-overview"],
             ["shift-reports"],
             ["deposit-shifts"],
+            ["shift-amendments"],
           ]),
         )
         .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () =>

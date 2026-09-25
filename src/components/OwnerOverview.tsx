@@ -50,25 +50,19 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       const { data: shifts, error } = await query;
       if (error) throw error;
       const ids = (shifts ?? []).map((s) => s.id);
-      const [{ data: txns }, { data: profiles }, { data: bankRows }, { data: ppobRows }] =
-        await Promise.all([
-          ids.length
-            ? supabase.from("transactions").select("shift_id").in("shift_id", ids)
-            : Promise.resolve({ data: [] as never[] }),
-          supabase.from("profiles").select("id, username"),
-          ids.length
-            ? supabase
-                .from("bank_balances")
-                .select("shift_id, initial_amount, final_amount")
-                .in("shift_id", ids)
-            : Promise.resolve({ data: [] as never[] }),
-          ids.length
-            ? supabase
-                .from("ppob_balances")
-                .select("shift_id, initial_amount, final_amount")
-                .in("shift_id", ids)
-            : Promise.resolve({ data: [] as never[] }),
-        ]);
+      const [{ data: txns }, { data: profiles }, { data: bankRows }] = await Promise.all([
+        ids.length
+          ? supabase.from("transactions").select("shift_id").in("shift_id", ids).limit(20000)
+          : Promise.resolve({ data: [] as never[] }),
+        supabase.from("profiles").select("id, username"),
+        ids.length
+          ? supabase
+              .from("bank_balances")
+              .select("shift_id, initial_amount, final_amount")
+              .in("shift_id", ids)
+              .limit(5000)
+          : Promise.resolve({ data: [] as never[] }),
+      ]);
       const nameOf = (id: string) => (profiles ?? []).find((p) => p.id === id)?.username ?? "kasir";
       const txnCountByShift = new Map<string, number>();
       (txns ?? []).forEach((t) => {
@@ -86,35 +80,28 @@ export function OwnerOverview({ username }: { username?: string | null }) {
           (bankFinalsByShift.get(b.shift_id) ?? 0) + num(b.final_amount),
         );
       });
-      const ppobInitialsByShift = new Map<string, number>();
-      const ppobFinalsByShift = new Map<string, number>();
-      (ppobRows ?? []).forEach((p) => {
-        ppobInitialsByShift.set(
-          p.shift_id,
-          (ppobInitialsByShift.get(p.shift_id) ?? 0) + num(p.initial_amount),
-        );
-        ppobFinalsByShift.set(
-          p.shift_id,
-          (ppobFinalsByShift.get(p.shift_id) ?? 0) + num(p.final_amount),
-        );
-      });
       const rows = (shifts ?? []).map((s) => {
         const bankInitialTotal = bankInitialsByShift.get(s.id) ?? 0;
         const bankFinalTotal = bankFinalsByShift.get(s.id) ?? 0;
-        const rowSaldoAwal = saldoAwal({
-          initialPhysical: num(s.initial_physical_balance),
-          bankInitials: [bankInitialTotal],
-          additionalCapital: num(s.additional_capital),
-        });
-        const rowSaldoAkhir =
-          s.modal_akhir === null
-            ? null
-            : saldoAkhir({
-                finalPhysical: num(s.final_physical_balance),
-                bankFinals: [bankFinalTotal],
-                settlement: num(s.settlement_amount),
-                expenses: num(s.total_expenses),
+        const rowSaldoAwal =
+          s.modal_awal !== null
+            ? num(s.modal_awal)
+            : saldoAwal({
+                initialPhysical: num(s.initial_physical_balance),
+                bankInitials: [bankInitialTotal],
+                additionalCapital: num(s.additional_capital),
               });
+        const rowSaldoAkhir =
+          s.status === "open" || s.modal_akhir === null
+            ? null
+            : s.modal_akhir !== null
+              ? num(s.modal_akhir)
+              : saldoAkhir({
+                  finalPhysical: num(s.final_physical_balance),
+                  bankFinals: [bankFinalTotal],
+                  settlement: num(s.settlement_amount),
+                  expenses: num(s.total_expenses),
+                });
         const laba =
           rowSaldoAkhir !== null
             ? hitungLaba({ saldoAkhir: rowSaldoAkhir, saldoAwal: rowSaldoAwal })

@@ -9,7 +9,7 @@ Project guidelines for BRILink Ledger.
 - `npm run lint` — ESLint (must be clean before commit)
 - `npm run typecheck` — `tsc --noEmit` (must be clean before commit)
 - `npm run format` — Prettier (SQL files excluded)
-- `npm test` — unit tests for `src/lib/ledger.test.ts` (requires Bun; test file uses extensionless imports)
+- `npm test` — unit tests for `src/lib/ledger.test.ts` (runs via tsx / Node.js test runner)
 
 ## Architecture notes
 

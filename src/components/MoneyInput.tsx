@@ -32,7 +32,7 @@ export function MoneyInput({ id, label, value, onChange, hint, required }: Props
           id={id}
           inputMode="numeric"
           className="num pl-9 text-sm font-semibold tracking-wide transition-all focus-visible:ring-primary/50"
-          value={value}
+          value={value ?? ""}
           required={required}
           onChange={(e) => {
             const raw = e.target.value.replace(/[^0-9]/g, "");

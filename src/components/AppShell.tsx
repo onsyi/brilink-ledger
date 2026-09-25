@@ -103,11 +103,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen pb-24 md:pb-0">
       <SessionTimeoutDialog open={showWarning} onExtend={extendSession} onLogout={handleTimeout} />
-      {error && (
-        <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 text-center text-sm text-destructive backdrop-blur-sm">
-          {error}
-        </div>
-      )}
 
       {/* Desktop header */}
       <header className="sticky top-0 z-20 hidden border-b border-border/40 bg-background/70 backdrop-blur-xl md:block">

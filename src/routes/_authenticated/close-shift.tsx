@@ -146,13 +146,18 @@ function CloseShift() {
       if (error) throw error;
     },
     onSuccess: () => {
+      setShowConfirm(false);
+      submittingRef.current = false;
       toast.success("Shift ditutup dan terkunci");
       queryClient.invalidateQueries({ queryKey: ["open-shift"] });
       queryClient.invalidateQueries({ queryKey: ["deposit-shifts"] });
       queryClient.invalidateQueries({ queryKey: ["last-closed-shift"] });
+      queryClient.invalidateQueries({ queryKey: ["shift-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["owner-overview"] });
       navigate({ to: "/reports" });
     },
     onError: (e: Error) => {
+      setShowConfirm(false);
       // A rejected duplicate must not release the guard — the first submission
       // still owns it. Clearing it here let a third click through to the RPC.
       if (e.message === IN_FLIGHT) return;
@@ -218,6 +223,18 @@ function CloseShift() {
       className="space-y-6 sm:space-y-7"
       onSubmit={(e) => {
         e.preventDefault();
+        if (finalCash === "") {
+          toast.error("Saldo fisik kas wajib diisi (isi 0 jika kas kosong)");
+          return;
+        }
+        if (Number(finalCash) < 0) {
+          toast.error("Saldo fisik kas tidak boleh negatif");
+          return;
+        }
+        if (Number(expenses || 0) > 0 && !expenseNotes.trim()) {
+          toast.error("Catatan pengeluaran wajib diisi jika ada nominal pengeluaran");
+          return;
+        }
         setShowConfirm(true);
       }}
     >

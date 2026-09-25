@@ -112,6 +112,7 @@ function Reports() {
     id: string;
     cashier: string;
     startedAt: string;
+    status: string;
   } | null>(null);
   const [rejectShift, setRejectShift] = useState<{
     id: string;
@@ -171,17 +172,19 @@ function Reports() {
         { data: ppobRows },
         { data: bankRows },
       ] = await Promise.all([
-        supabase.from("transactions").select("shift_id").in("shift_id", ids),
+        supabase.from("transactions").select("shift_id").in("shift_id", ids).limit(50000),
         supabase.from("profiles").select("id, username, branch_id"),
         supabase.from("branches").select("id, name"),
         supabase
           .from("ppob_balances")
           .select("shift_id, initial_amount, final_amount")
-          .in("shift_id", ids),
+          .in("shift_id", ids)
+          .limit(10000),
         supabase
           .from("bank_balances")
           .select("shift_id, initial_amount, final_amount")
-          .in("shift_id", ids),
+          .in("shift_id", ids)
+          .limit(10000),
       ]);
       const branchNameOf = new Map<string, string>();
       (allBranches ?? []).forEach((b) => branchNameOf.set(b.id, b.name));
@@ -234,21 +237,27 @@ function Reports() {
 
         // Rumus Saldo Awal: Saldo semua rekening shift sebelumnya (Bank) + Saldo Awal Buka Kasir + Penambahan Modal
         // (PPOB tidak digabung karena berdiri sendiri)
-        const rowSaldoAwal = saldoAwal({
+        const calculatedSaldoAwal = saldoAwal({
           initialPhysical: num(s.initial_physical_balance),
           bankInitials: [bankInitialTotal],
           additionalCapital: num(s.additional_capital),
         });
+        const rowSaldoAwal = s.modal_awal !== null ? num(s.modal_awal) : calculatedSaldoAwal;
 
         // Rumus Saldo Akhir: Saldo uang Fisik tutup kasir + Saldo rekening Bank tutup kasir + settlement + Pengeluaran
         // (PPOB tidak digabung karena berdiri sendiri)
-        const rowSaldoAkhir = closed
+        const calculatedSaldoAkhir = closed
           ? saldoAkhir({
               finalPhysical: num(s.final_physical_balance),
               bankFinals: [bankFinalTotal],
               settlement: num(s.settlement_amount),
               expenses: num(s.total_expenses),
             })
+          : null;
+        const rowSaldoAkhir = closed
+          ? s.modal_akhir !== null
+            ? num(s.modal_akhir)
+            : calculatedSaldoAkhir
           : null;
 
         // Rumus Laba: Saldo Akhir - Saldo Awal
@@ -767,6 +776,7 @@ function Reports() {
                                 id: r.shift.id,
                                 cashier: r.cashier,
                                 startedAt: r.shift.start_time,
+                                status: r.shift.status,
                               })
                             }
                             title="Koreksi saldo bank / PPOB shift ini"
@@ -1065,7 +1075,7 @@ function BalanceAuditDialog({
   shift,
   onClose,
 }: {
-  shift: { id: string; cashier: string; startedAt: string };
+  shift: { id: string; cashier: string; startedAt: string; status?: string };
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -1098,6 +1108,7 @@ function BalanceAuditDialog({
       ]);
       if (bankRes.error) throw bankRes.error;
       if (ppobRes.error) throw ppobRes.error;
+      if (shiftRes.error) throw shiftRes.error;
       const map = new Map<string, { initial: number; final: number }>();
       (bankRes.data ?? []).forEach((b) =>
         map.set(`bank:${b.bank_name}`, {
@@ -1207,7 +1218,7 @@ function BalanceAuditDialog({
               >
                 <option value="bank">Bank</option>
                 <option value="ppob">PPOB</option>
-                <option value="shift">Angka Penutupan (Shift)</option>
+                {shift.status !== "open" && <option value="shift">Angka Penutupan (Shift)</option>}
               </select>
             </div>
             <div className="space-y-1.5">

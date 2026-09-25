@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   PlayCircle,
@@ -17,7 +17,9 @@ import {
   Plus,
   Trash2,
   HandCoins,
+  RotateCw,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -108,26 +110,58 @@ function OpenShiftPanel({
     },
   });
 
+  const applyPreviousBalances = useCallback(
+    (
+      data: {
+        banks: Array<{ bank_name: string; final_amount: number | string }>;
+        ppob: Array<{ provider_name: string; final_amount: number | string }>;
+      } | null,
+    ) => {
+      if (!data) return;
+      const bankMap: Record<string, string> = {};
+      for (const b of BANKS) {
+        const prevBank = data.banks.find((x) => x.bank_name === b);
+        bankMap[b] = prevBank ? String(num(prevBank.final_amount)) : "";
+      }
+      const ppobMap: Record<string, string> = {};
+      for (const p of PPOB_PROVIDERS) {
+        const prevPpob = data.ppob.find((x) => x.provider_name === p);
+        ppobMap[p] = prevPpob ? String(num(prevPpob.final_amount)) : "";
+      }
+      setBanks(bankMap);
+      setPpob(ppobMap);
+    },
+    [],
+  );
+
+  const prevDataRef = useRef(lastShift.data);
+
   useEffect(() => {
-    // Menunggu query selesai *dan* berhasil. Hydrating saat error akan mengunci
-    // form pada nilai kosong: `hydrated` sekali true tidak pernah dibuka lagi,
-    // jadi refetch yang berhasil tidak akan mengisi ulang kolomnya.
-    if (hydrated || lastShift.isPending || lastShift.isError) return;
+    if (lastShift.isPending || lastShift.isError) return;
     const prev = lastShift.data;
-    const bankMap: Record<string, string> = {};
-    for (const b of BANKS) {
-      const prevBank = prev?.banks.find((x) => x.bank_name === b);
-      bankMap[b] = prevBank ? String(num(prevBank.final_amount)) : "";
+    // Hydrate saat data pertama kali tersedia, atau saat data berubah dari null menjadi ada
+    if (prev && (!hydrated || !prevDataRef.current)) {
+      applyPreviousBalances(prev);
+      setHydrated(true);
+    } else if (!hydrated) {
+      setHydrated(true);
     }
-    const ppobMap: Record<string, string> = {};
-    for (const p of PPOB_PROVIDERS) {
-      const prevPpob = prev?.ppob.find((x) => x.provider_name === p);
-      ppobMap[p] = prevPpob ? String(num(prevPpob.final_amount)) : "";
+    prevDataRef.current = prev;
+  }, [hydrated, lastShift.isPending, lastShift.isError, lastShift.data, applyPreviousBalances]);
+
+  const handlePullBalances = async () => {
+    try {
+      const result = await lastShift.refetch();
+      if (result.data) {
+        applyPreviousBalances(result.data);
+        toast.success("Saldo berhasil ditarik dari shift sebelumnya");
+      } else {
+        toast.info("Tidak ada data shift sebelumnya yang ditemukan untuk cabang ini");
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal menarik data shift sebelumnya");
     }
-    setBanks(bankMap);
-    setPpob(ppobMap);
-    setHydrated(true);
-  }, [hydrated, lastShift.isPending, lastShift.isError, lastShift.data]);
+  };
 
   const openingTotal = modalAwal({
     initialPhysical: num(initial),
@@ -261,9 +295,24 @@ function OpenShiftPanel({
           </div>
 
           <section className="rounded-xl border border-border/40 bg-secondary/20 p-4">
-            <div className="flex items-center gap-2">
-              <Building2 className="size-4 text-digital" />
-              <h2 className="text-sm font-bold">Saldo awal rekening (Bank)</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Building2 className="size-4 text-digital" />
+                <h2 className="text-sm font-bold">Saldo awal rekening (Bank)</h2>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handlePullBalances}
+                disabled={lastShift.isFetching}
+                className="h-7 text-xs text-primary hover:text-primary/80"
+              >
+                <RotateCw
+                  className={cn("mr-1.5 size-3.5", lastShift.isFetching && "animate-spin")}
+                />
+                Tarik saldo sebelumnya
+              </Button>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">{carryNote}</p>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -301,7 +350,7 @@ function OpenShiftPanel({
           {lockedMismatch.length > 0 && (
             <div className="flex gap-2.5 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3">
               <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
-              <div className="text-xs">
+              <div className="flex-1 text-xs">
                 <p className="font-semibold text-destructive">
                   Saldo awal tidak cocok dengan penutupan shift sebelumnya
                 </p>
@@ -310,6 +359,23 @@ function OpenShiftPanel({
                   Kalau angka penutupan itu yang keliru, minta owner mengauditnya lebih dulu — shift
                   tidak bisa dibuka dengan angka yang berbeda.
                 </p>
+                {lastShift.data && (
+                  <div className="mt-2.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        applyPreviousBalances(lastShift.data);
+                        toast.success("Saldo diselaraskan dengan shift sebelumnya");
+                      }}
+                      className="h-7 border-destructive/40 text-xs text-destructive hover:bg-destructive/10"
+                    >
+                      <RotateCw className="mr-1.5 size-3" />
+                      Samakan dengan Saldo Shift Sebelumnya
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -897,6 +963,8 @@ function TransactionPanel({ shiftId }: { shiftId: string }) {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
+      // Hapus piutang tertaut bila ada sebelum menghapus transaksi
+      await supabase.from("receivables").delete().eq("transaction_id", id).eq("shift_id", shiftId);
       const { error } = await supabase
         .from("transactions")
         .delete()
@@ -907,6 +975,9 @@ function TransactionPanel({ shiftId }: { shiftId: string }) {
     onSuccess: () => {
       toast.success("Transaksi dihapus");
       queryClient.invalidateQueries({ queryKey: ["txns", shiftId] });
+      queryClient.invalidateQueries({ queryKey: ["pending-receivables"] });
+      queryClient.invalidateQueries({ queryKey: ["owner-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["shift-reports"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });

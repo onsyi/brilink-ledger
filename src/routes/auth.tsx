@@ -48,10 +48,10 @@ function AuthPage() {
   useEffect(() => {
     let active = true;
     supabase.auth.getUser().then(({ data, error }) => {
-      if (error || !data?.user) {
-        supabase.auth.signOut();
-      } else if (active && data.user) {
+      if (active && data?.user) {
         navigate({ to: "/dashboard", replace: true });
+      } else if (error && error.name !== "AuthSessionMissingError") {
+        supabase.auth.signOut();
       }
     });
     return () => {
