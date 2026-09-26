@@ -11,15 +11,19 @@ import {
   Clock,
   UserCheck,
   Undo2,
+  LayoutDashboard,
+  TableProperties,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { hitungLaba, num, rupiah, saldoAkhir, saldoAwal } from "@/lib/ledger";
 import { QueryError } from "@/components/QueryError";
+import { ShiftRecapTable } from "@/components/ShiftRecapTable";
 import { cn } from "@/lib/utils";
 
 export function OwnerOverview({ username }: { username?: string | null }) {
   const [branchFilter, setBranchFilter] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState<"overview" | "closing_recap">("overview");
 
   const branches = useQuery({
     queryKey: ["branches"],
@@ -194,181 +198,220 @@ export function OwnerOverview({ username }: { username?: string | null }) {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="responsive-grid-3">
-        <Kpi
-          label="Shift aktif sekarang"
-          value={String(d?.open.length ?? 0)}
-          icon={<Clock className="size-5" />}
-          iconBg="bg-[oklch(0.82_0.16_82_/_0.15)]"
-          iconColor="text-cash"
-          gradient="gradient-text-gold"
-        />
-        <Kpi
-          label="Laba fee hari ini"
-          value={rupiah(d?.profitToday ?? 0)}
-          icon={<TrendingUp className="size-5" />}
-          iconBg="bg-[oklch(0.72_0.17_155_/_0.15)]"
-          iconColor="text-success"
-          gradient="gradient-text-emerald"
-        />
-        <Kpi
-          label="Total kasir"
-          value={String(d?.cashiers ?? 0)}
-          icon={<UserCheck className="size-5" />}
-          iconBg="bg-[oklch(0.72_0.13_205_/_0.15)]"
-          iconColor="text-digital"
-          gradient="gradient-text-cyan"
-        />
+      {/* Tab Switcher */}
+      <div className="flex border-b border-border/50 gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab("overview")}
+          className={cn(
+            "flex items-center gap-2 pb-3 px-1 text-sm font-semibold border-b-2 transition-all cursor-pointer",
+            activeTab === "overview"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <LayoutDashboard className="size-4" /> Ringkasan
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("closing_recap")}
+          className={cn(
+            "flex items-center gap-2 pb-3 px-1 text-sm font-semibold border-b-2 transition-all cursor-pointer",
+            activeTab === "closing_recap"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <TableProperties className="size-4" /> Rincian Tutup Shift
+        </button>
       </div>
 
-      {/* Active Shifts */}
-      <section className="glass-card p-5 sm:p-6">
-        <h2 className="flex items-center gap-2.5 text-lg font-bold">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary/12">
-            <Users className="size-4 text-primary" />
+      {activeTab === "closing_recap" ? (
+        <ShiftRecapTable initialBranchFilter={branchFilter} />
+      ) : (
+        <>
+          {/* KPI Cards */}
+          <div className="responsive-grid-3">
+            <Kpi
+              label="Shift aktif sekarang"
+              value={String(d?.open.length ?? 0)}
+              icon={<Clock className="size-5" />}
+              iconBg="bg-[oklch(0.82_0.16_82_/_0.15)]"
+              iconColor="text-cash"
+              gradient="gradient-text-gold"
+            />
+            <Kpi
+              label="Laba fee hari ini"
+              value={rupiah(d?.profitToday ?? 0)}
+              icon={<TrendingUp className="size-5" />}
+              iconBg="bg-[oklch(0.72_0.17_155_/_0.15)]"
+              iconColor="text-success"
+              gradient="gradient-text-emerald"
+            />
+            <Kpi
+              label="Total kasir"
+              value={String(d?.cashiers ?? 0)}
+              icon={<UserCheck className="size-5" />}
+              iconBg="bg-[oklch(0.72_0.13_205_/_0.15)]"
+              iconColor="text-digital"
+              gradient="gradient-text-cyan"
+            />
           </div>
-          Shift kasir yang sedang berjalan
-        </h2>
-        {(d?.open.length ?? 0) === 0 ? (
-          <p className="mt-4 rounded-xl border border-border/40 bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-            Tidak ada shift aktif. Kasir dapat membuka shift dari akun masing-masing.
-          </p>
-        ) : (
-          <ul className="mt-4 space-y-2.5">
-            {d?.open.map((r) => (
-              <li
-                key={r.shift.id}
-                className="rounded-xl border border-border/50 bg-secondary/30 px-4 py-3 transition-all hover:border-primary/20 hover:bg-secondary/40"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex size-2">
-                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
-                      <span className="relative inline-flex size-2 rounded-full bg-success" />
-                    </span>
-                    <span className="font-semibold">{r.cashier}</span>
-                    {/* Shift yang laporannya ditolak kembali terbuka. Tanpa
+
+          {/* Active Shifts */}
+          <section className="glass-card p-5 sm:p-6">
+            <h2 className="flex items-center gap-2.5 text-lg font-bold">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-primary/12">
+                <Users className="size-4 text-primary" />
+              </div>
+              Shift kasir yang sedang berjalan
+            </h2>
+            {(d?.open.length ?? 0) === 0 ? (
+              <p className="mt-4 rounded-xl border border-border/40 bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                Tidak ada shift aktif. Kasir dapat membuka shift dari akun masing-masing.
+              </p>
+            ) : (
+              <ul className="mt-4 space-y-2.5">
+                {d?.open.map((r) => (
+                  <li
+                    key={r.shift.id}
+                    className="rounded-xl border border-border/50 bg-secondary/30 px-4 py-3 transition-all hover:border-primary/20 hover:bg-secondary/40"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex size-2">
+                          <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
+                          <span className="relative inline-flex size-2 rounded-full bg-success" />
+                        </span>
+                        <span className="font-semibold">{r.cashier}</span>
+                        {/* Shift yang laporannya ditolak kembali terbuka. Tanpa
                         penanda ini, shift tersebut duduk di daftar "sedang
                         berjalan" tanpa keterangan bahwa ia menunggu perbaikan. */}
-                    {r.shift.rejected_at && (
-                      <span
-                        title={`Laporan ditolak — alasan: ${r.shift.rejection_reason ?? "—"}`}
-                        className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/15 px-2 py-0.5 text-[10px] font-bold text-destructive"
-                      >
-                        <Undo2 className="size-2.5" /> menunggu perbaikan
+                        {r.shift.rejected_at && (
+                          <span
+                            title={`Laporan ditolak — alasan: ${r.shift.rejection_reason ?? "—"}`}
+                            className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/15 px-2 py-0.5 text-[10px] font-bold text-destructive"
+                          >
+                            <Undo2 className="size-2.5" /> menunggu perbaikan
+                          </span>
+                        )}
+                      </div>
+                      <span className="num inline-flex items-center gap-1.5 rounded-lg bg-secondary/50 px-2 py-0.5 text-[11px] text-muted-foreground">
+                        <Clock className="size-3" />
+                        {new Date(r.shift.start_time).toLocaleString("id-ID")}
                       </span>
-                    )}
-                  </div>
-                  <span className="num inline-flex items-center gap-1.5 rounded-lg bg-secondary/50 px-2 py-0.5 text-[11px] text-muted-foreground">
-                    <Clock className="size-3" />
-                    {new Date(r.shift.start_time).toLocaleString("id-ID")}
-                  </span>
-                </div>
-                <div className="num mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                  <span className="text-muted-foreground">
-                    Saldo awal{" "}
-                    <span className="font-semibold text-cash">{rupiah(r.saldoAwal)}</span>
-                  </span>
-                  <span className="text-muted-foreground">{r.txnCount} transaksi</span>
-                  <span className="font-semibold text-muted-foreground">Laba —</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                    </div>
+                    <div className="num mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                      <span className="text-muted-foreground">
+                        Saldo awal{" "}
+                        <span className="font-semibold text-cash">{rupiah(r.saldoAwal)}</span>
+                      </span>
+                      <span className="text-muted-foreground">{r.txnCount} transaksi</span>
+                      <span className="font-semibold text-muted-foreground">Laba —</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
-      {/* Shift History Table */}
-      <section className="glass-card p-5 sm:p-6">
-        <h2 className="text-lg font-bold">Riwayat shift terakhir</h2>
-        <div className="mt-4 overflow-x-auto hide-scrollbar">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="border-b border-border/60">
-                <th className="pb-3 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                  Kasir
-                </th>
-                <th className="pb-3 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                  Mulai
-                </th>
-                <th className="pb-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                  Transaksi
-                </th>
-                <th className="pb-3 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                  Pengeluaran
-                </th>
-                <th className="pb-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                  Laba
-                </th>
-                <th className="pb-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody className="num">
-              {(d?.rows ?? []).slice(0, 10).map((r) => (
-                <tr
-                  key={r.shift.id}
-                  className="border-b border-border/30 transition-colors hover:bg-secondary/20"
-                >
-                  <td className="py-3 text-left font-medium">{r.cashier}</td>
-                  <td className="py-3 text-left text-muted-foreground">
-                    {new Date(r.shift.start_time).toLocaleDateString("id-ID")}
-                  </td>
-                  <td className="py-3 text-right">{r.txnCount}</td>
-                  <td className="max-w-[220px] py-3 text-left align-top">
-                    <span className={num(r.shift.total_expenses) > 0 ? "text-destructive" : ""}>
-                      {rupiah(r.shift.total_expenses)}
-                    </span>
-                    {r.shift.expense_notes ? (
-                      <span
-                        title={r.shift.expense_notes}
-                        className="mt-0.5 block truncate text-[11px] italic text-muted-foreground"
-                      >
-                        {r.shift.expense_notes}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td
-                    className={cn(
-                      "py-3 text-right align-top font-semibold",
-                      r.labaFee !== null && r.labaFee < 0 ? "text-destructive" : "text-success",
-                    )}
-                  >
-                    {r.labaFee !== null ? rupiah(r.labaFee) : "—"}
-                  </td>
-                  <td className="py-3 text-right">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                        r.shift.status === "open"
-                          ? "bg-success/15 text-success"
-                          : "bg-muted/60 text-muted-foreground"
-                      }`}
+          {/* Shift History Table */}
+          <section className="glass-card p-5 sm:p-6">
+            <h2 className="text-lg font-bold">Riwayat shift terakhir</h2>
+            <div className="mt-4 overflow-x-auto hide-scrollbar">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead>
+                  <tr className="border-b border-border/60">
+                    <th className="pb-3 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                      Kasir
+                    </th>
+                    <th className="pb-3 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                      Mulai
+                    </th>
+                    <th className="pb-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                      Transaksi
+                    </th>
+                    <th className="pb-3 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                      Pengeluaran
+                    </th>
+                    <th className="pb-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                      Laba
+                    </th>
+                    <th className="pb-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="num">
+                  {(d?.rows ?? []).slice(0, 10).map((r) => (
+                    <tr
+                      key={r.shift.id}
+                      className="border-b border-border/30 transition-colors hover:bg-secondary/20"
                     >
-                      {r.shift.status === "open" ? "Berjalan" : "Ditutup"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {(d?.rows ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-6 text-center text-muted-foreground">
-                    Belum ada shift tercatat.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/reports">
-              <BarChart3 className="mr-1.5 size-4" /> Laporan & audit
-            </Link>
-          </Button>
-        </div>
-      </section>
+                      <td className="py-3 text-left font-medium">{r.cashier}</td>
+                      <td className="py-3 text-left text-muted-foreground">
+                        {new Date(r.shift.start_time).toLocaleDateString("id-ID")}
+                      </td>
+                      <td className="py-3 text-right">{r.txnCount}</td>
+                      <td className="max-w-[220px] py-3 text-left align-top">
+                        <span className={num(r.shift.total_expenses) > 0 ? "text-destructive" : ""}>
+                          {rupiah(r.shift.total_expenses)}
+                        </span>
+                        {r.shift.expense_notes ? (
+                          <span
+                            title={r.shift.expense_notes}
+                            className="mt-0.5 block truncate text-[11px] italic text-muted-foreground"
+                          >
+                            {r.shift.expense_notes}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td
+                        className={cn(
+                          "py-3 text-right align-top font-semibold",
+                          r.labaFee !== null && r.labaFee < 0 ? "text-destructive" : "text-success",
+                        )}
+                      >
+                        {r.labaFee !== null ? rupiah(r.labaFee) : "—"}
+                      </td>
+                      <td className="py-3 text-right">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            r.shift.status === "open"
+                              ? "bg-success/15 text-success"
+                              : "bg-muted/60 text-muted-foreground"
+                          }`}
+                        >
+                          {r.shift.status === "open" ? "Berjalan" : "Ditutup"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {(d?.rows ?? []).length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-muted-foreground">
+                        Belum ada shift tercatat.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Button asChild variant="default" size="sm">
+                <Link to="/shift-recap">
+                  <TableProperties className="mr-1.5 size-4" /> Buka Halaman Rincian Penuh
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/reports">
+                  <BarChart3 className="mr-1.5 size-4" /> Laporan & audit
+                </Link>
+              </Button>
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }

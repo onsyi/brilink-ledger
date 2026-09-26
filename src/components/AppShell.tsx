@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   UserCircle,
   TriangleAlert,
+  TableProperties,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils";
 const nav = [
   { to: "/dashboard", label: "Shift", icon: LayoutDashboard, ownerLabel: "Ringkasan" },
   { to: "/close-shift", label: "Tutup Shift", icon: ClipboardCheck, cashierOnly: true },
+  { to: "/shift-recap", label: "Rincian Tutup Shift", icon: TableProperties, ownerOnly: true },
   { to: "/deposits", label: "Setoran", icon: Wallet },
   { to: "/reports", label: "Laporan", icon: BarChart3 },
   { to: "/settings", label: "Pengaturan", icon: Settings },
