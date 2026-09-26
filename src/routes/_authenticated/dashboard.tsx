@@ -228,11 +228,12 @@ function OpenShiftPanel({
   // terbaca -- itu yang menentukan siapa yang ditanya kalau saldonya meleset.
   const prevShift = lastShift.data?.shift;
   const handoverBy = prevShift && !prevShift.is_own ? prevShift.closed_by : null;
+  const isDigitalLocked = Boolean(lastShift.data);
   const carryNote = lastShift.data
     ? handoverBy
-      ? `Terkunci ke saldo akhir shift ${handoverBy}.`
-      : "Terkunci ke saldo akhir shift sebelumnya."
-    : "Isi manual hanya untuk shift pertama kali.";
+      ? `Terkunci otomatis mengikuti saldo akhir shift ${handoverBy}.`
+      : "Terkunci otomatis mengikuti saldo akhir shift sebelumnya."
+    : "Isi manual hanya untuk shift pertama kali di cabang ini.";
 
   // Cermin dari assert_opening_continuity(): akun yang punya saldo akhir di
   // shift sebelumnya wajib dibuka dengan angka yang sama. Database tetap yang
@@ -267,7 +268,8 @@ function OpenShiftPanel({
           <div>
             <h1 className="text-xl font-bold sm:text-2xl">Buka Shift</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Isi modal awal: kas fisik dan saldo rekening (dari shift sebelumnya).
+              Isi saldo tunai awal buka kasir. Saldo rekening bank &amp; PPOB dikunci otomatis
+              mengikuti shift sebelumnya.
             </p>
             {isBranchMissing && (
               <p className="mt-2 text-sm font-medium text-destructive">
@@ -322,6 +324,7 @@ function OpenShiftPanel({
                   id={`open-bank-${b}`}
                   label={b}
                   value={banks[b] ?? ""}
+                  readOnly={isDigitalLocked}
                   onChange={(v) => setBanks((prev) => ({ ...prev, [b]: v }))}
                 />
               ))}
@@ -341,6 +344,7 @@ function OpenShiftPanel({
                   id={`open-ppob-${p}`}
                   label={p}
                   value={ppob[p] ?? ""}
+                  readOnly={isDigitalLocked}
                   onChange={(v) => setPpob((prev) => ({ ...prev, [p]: v }))}
                 />
               ))}
@@ -677,8 +681,8 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: OpenShif
           <div>
             <h2 className="text-lg font-bold">Perbaiki modal awal</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Koreksi angka yang salah diinput saat membuka shift. Perubahan tercatat dan bisa
-              dilihat owner.
+              Koreksi saldo tunai kasir yang salah diinput saat membuka shift. Saldo bank &amp; PPOB
+              terkunci otomatis mengikuti shift sebelumnya.
             </p>
           </div>
 
@@ -704,6 +708,7 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: OpenShif
                   id={`edit-bank-${b}`}
                   label={b}
                   value={banks[b] ?? ""}
+                  readOnly={true}
                   onChange={(v) => setBanks((prev) => ({ ...prev, [b]: v }))}
                 />
               ))}
@@ -722,6 +727,7 @@ function ActiveShiftPanel({ shiftId, shift }: { shiftId: string; shift: OpenShif
                   id={`edit-ppob-${p}`}
                   label={p}
                   value={ppob[p] ?? ""}
+                  readOnly={true}
                   onChange={(v) => setPpob((prev) => ({ ...prev, [p]: v }))}
                 />
               ))}
