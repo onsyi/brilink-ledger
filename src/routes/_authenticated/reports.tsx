@@ -16,6 +16,7 @@ import {
   PencilLine,
   ScanLine,
   Undo2,
+  Banknote,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -360,6 +361,7 @@ function Reports() {
   const totalPpobUsed = rows.reduce((s, r) => s + (r.ppobUsed ?? 0), 0);
   const totalFbi = rows.reduce((s, r) => s + (r.fbi ?? 0), 0);
   const totalFs = rows.reduce((s, r) => s + (r.fs ?? 0), 0);
+  const totalPengeluaran = rows.reduce((s, r) => s + num(r.shift.total_expenses), 0);
 
   const periodStats = useMemo(() => {
     return {
@@ -493,13 +495,23 @@ function Reports() {
 
       {/* Stats Summary Cards */}
       <div className="responsive-grid-3">
-        <Stat
-          label="Total laba fee"
-          value={rupiah(totalLaba)}
-          icon={<TrendingUp className="size-5" />}
-          gradient="gradient-text-emerald"
-          iconBg="bg-[oklch(0.72_0.17_155_/_0.15)] text-success"
-        />
+        {isOwner ? (
+          <Stat
+            label="Total laba fee"
+            value={rupiah(totalLaba)}
+            icon={<TrendingUp className="size-5" />}
+            gradient="gradient-text-emerald"
+            iconBg="bg-[oklch(0.72_0.17_155_/_0.15)] text-success"
+          />
+        ) : (
+          <Stat
+            label="Total pengeluaran"
+            value={rupiah(totalPengeluaran)}
+            icon={<Banknote className="size-5" />}
+            gradient="gradient-text-gold"
+            iconBg="bg-[oklch(0.82_0.16_82_/_0.15)] text-cash"
+          />
+        )}
         <Stat
           label="Total setoran kasir"
           value={rupiah(totalDeposit)}
@@ -517,7 +529,7 @@ function Reports() {
       </div>
 
       {/* Interactive Profit Trend Chart (SVG) */}
-      {chartPoints.length > 0 && (
+      {isOwner && chartPoints.length > 0 && (
         <section className="glass-card p-5 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -603,16 +615,20 @@ function Reports() {
                   <th className="pb-3 text-right">Settlement</th>
                   <th className="pb-3 text-right">PPOB Terpakai</th>
                   <th className="pb-3 text-right">Saldo Akhir</th>
-                  <th className="pb-3 text-right">Laba</th>
-                  <th className="pb-3 text-right" title="Laba − PPOB Terpakai">
-                    FBI
-                  </th>
-                  <th
-                    className="pb-3 text-right"
-                    title="Rumus FS = Setoran Kasir × 15% (0 jika tidak ada setoran)"
-                  >
-                    FS
-                  </th>
+                  {isOwner && <th className="pb-3 text-right">Laba</th>}
+                  {isOwner && (
+                    <th className="pb-3 text-right" title="Laba − PPOB Terpakai">
+                      FBI
+                    </th>
+                  )}
+                  {isOwner && (
+                    <th
+                      className="pb-3 text-right"
+                      title="Rumus FS = Setoran Kasir × 15% (0 jika tidak ada setoran)"
+                    >
+                      FS
+                    </th>
+                  )}
                   <th className="pb-3 text-center">Status</th>
                   {isOwner && <th className="pb-3 text-center">Tindakan</th>}
                 </tr>
@@ -715,47 +731,53 @@ function Reports() {
                     >
                       {r.saldoAkhir !== null ? rupiah(r.saldoAkhir) : "—"}
                     </td>
-                    <td
-                      className={cn(
-                        "py-3.5 text-right font-bold",
-                        r.laba !== null && r.laba < 0 ? "text-destructive" : "text-success",
-                      )}
-                      title={
-                        r.laba !== null && r.saldoAkhir !== null
-                          ? `Rumus Laba: Saldo Akhir (${rupiah(r.saldoAkhir)}) − Saldo Awal (${rupiah(r.saldoAwal)})`
-                          : "Shift belum ditutup"
-                      }
-                    >
-                      {r.laba !== null ? rupiah(r.laba) : "—"}
-                    </td>
+                    {isOwner && (
+                      <td
+                        className={cn(
+                          "py-3.5 text-right font-bold",
+                          r.laba !== null && r.laba < 0 ? "text-destructive" : "text-success",
+                        )}
+                        title={
+                          r.laba !== null && r.saldoAkhir !== null
+                            ? `Rumus Laba: Saldo Akhir (${rupiah(r.saldoAkhir)}) − Saldo Awal (${rupiah(r.saldoAwal)})`
+                            : "Shift belum ditutup"
+                        }
+                      >
+                        {r.laba !== null ? rupiah(r.laba) : "—"}
+                      </td>
+                    )}
                     {/* FBI memang bisa negatif kalau pemakaian saldo PPOB
                         melebihi laba — itu justru inti kolom ini. */}
-                    <td
-                      className="py-3.5 text-right font-bold"
-                      title={
-                        r.fbi !== null
-                          ? `Rumus FBI: Laba (${rupiah(r.laba)}) − PPOB Terpakai (${rupiah(r.ppobUsed)})`
-                          : "Shift belum ditutup"
-                      }
-                    >
-                      {r.fbi !== null ? (
-                        <span className={r.fbi < 0 ? "text-destructive" : "text-success"}>
-                          {rupiah(r.fbi)}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td
-                      className="py-3.5 text-right font-medium text-cash"
-                      title={
-                        r.fs !== null
-                          ? `Rumus FS: Setoran (${rupiah(r.shift.deposit_amount)}) × 15%`
-                          : "Shift belum ditutup"
-                      }
-                    >
-                      {r.fs !== null ? rupiah(r.fs) : "—"}
-                    </td>
+                    {isOwner && (
+                      <td
+                        className="py-3.5 text-right font-bold"
+                        title={
+                          r.fbi !== null
+                            ? `Rumus FBI: Laba (${rupiah(r.laba)}) − PPOB Terpakai (${rupiah(r.ppobUsed)})`
+                            : "Shift belum ditutup"
+                        }
+                      >
+                        {r.fbi !== null ? (
+                          <span className={r.fbi < 0 ? "text-destructive" : "text-success"}>
+                            {rupiah(r.fbi)}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    )}
+                    {isOwner && (
+                      <td
+                        className="py-3.5 text-right font-medium text-cash"
+                        title={
+                          r.fs !== null
+                            ? `Rumus FS: Setoran (${rupiah(r.shift.deposit_amount)}) × 15%`
+                            : "Shift belum ditutup"
+                        }
+                      >
+                        {r.fs !== null ? rupiah(r.fs) : "—"}
+                      </td>
+                    )}
                     <td className="py-3.5 text-center">
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
@@ -825,23 +847,27 @@ function Reports() {
                   <td colSpan={2} />
                   <td className="py-3.5 text-right text-accent">{rupiah(totalPpobUsed)}</td>
                   <td />
-                  <td
-                    className={cn(
-                      "py-3.5 text-right",
-                      totalLaba < 0 ? "text-destructive" : "text-success",
-                    )}
-                  >
-                    {rupiah(totalLaba)}
-                  </td>
-                  <td
-                    className={cn(
-                      "py-3.5 text-right",
-                      totalFbi < 0 ? "text-destructive" : "text-success",
-                    )}
-                  >
-                    {rupiah(totalFbi)}
-                  </td>
-                  <td className="py-3.5 text-right text-cash">{rupiah(totalFs)}</td>
+                  {isOwner && (
+                    <td
+                      className={cn(
+                        "py-3.5 text-right",
+                        totalLaba < 0 ? "text-destructive" : "text-success",
+                      )}
+                    >
+                      {rupiah(totalLaba)}
+                    </td>
+                  )}
+                  {isOwner && (
+                    <td
+                      className={cn(
+                        "py-3.5 text-right",
+                        totalFbi < 0 ? "text-destructive" : "text-success",
+                      )}
+                    >
+                      {rupiah(totalFbi)}
+                    </td>
+                  )}
+                  {isOwner && <td className="py-3.5 text-right text-cash">{rupiah(totalFs)}</td>}
                   <td colSpan={isOwner ? 2 : 1} />
                 </tr>
               </tfoot>

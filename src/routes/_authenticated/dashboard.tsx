@@ -876,6 +876,8 @@ const txnSelectCls =
   "h-10 w-full rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 function TransactionPanel({ shiftId }: { shiftId: string }) {
+  const { role } = useAuth();
+  const isOwner = role === "owner";
   const queryClient = useQueryClient();
   const txns = useQuery(txnsQuery(shiftId));
   const [type, setType] = useState<TxnType>("tarik_tunai");
@@ -1141,9 +1143,11 @@ function TransactionPanel({ shiftId }: { shiftId: string }) {
           <span className="text-muted-foreground">
             Net kas: <b className="num text-foreground">{rupiah(summary.cashNet)}</b>
           </span>
-          <span className="text-muted-foreground">
-            Laba bersih: <b className="num text-success">{rupiah(summary.profit)}</b>
-          </span>
+          {isOwner && (
+            <span className="text-muted-foreground">
+              Laba bersih: <b className="num text-success">{rupiah(summary.profit)}</b>
+            </span>
+          )}
         </div>
 
         {txns.isError ? (
@@ -1167,7 +1171,7 @@ function TransactionPanel({ shiftId }: { shiftId: string }) {
                   <th className="pb-2 text-right">Pokok</th>
                   <th className="pb-2 text-right">Fee</th>
                   <th className="pb-2 text-right">Biaya</th>
-                  <th className="pb-2 text-right">Laba</th>
+                  {isOwner && <th className="pb-2 text-right">Laba</th>}
                   <th className="pb-2" />
                 </tr>
               </thead>
@@ -1190,7 +1194,9 @@ function TransactionPanel({ shiftId }: { shiftId: string }) {
                     <td className="py-2 text-right">{rupiah(t.principal_amount)}</td>
                     <td className="py-2 text-right text-success">{rupiah(t.customer_fee)}</td>
                     <td className="py-2 text-right text-destructive">{rupiah(t.provider_cost)}</td>
-                    <td className="py-2 text-right font-semibold">{rupiah(num(t.profit_net))}</td>
+                    {isOwner && (
+                      <td className="py-2 text-right font-semibold">{rupiah(num(t.profit_net))}</td>
+                    )}
                     <td className="py-2 text-right">
                       <button
                         onClick={() => remove.mutate(t.id)}
