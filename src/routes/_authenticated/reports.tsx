@@ -148,27 +148,41 @@ function Reports() {
       const matched = count ?? (shiftRows ?? []).length;
       const ids = (shiftRows ?? []).map((s) => s.id);
       if (ids.length === 0) return { rows: [], matched, truncated: false };
-      const [
-        { data: txns },
-        { data: profiles },
-        { data: allBranches },
-        { data: ppobRows },
-        { data: bankRows },
-      ] = await Promise.all([
-        supabase.from("transactions").select("shift_id").in("shift_id", ids).limit(50000),
-        supabase.from("profiles").select("id, username, branch_id"),
-        supabase.from("branches").select("id, name"),
+
+      const CHUNK_SIZE = 40;
+      const idChunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        idChunks.push(ids.slice(i, i + CHUNK_SIZE));
+      }
+
+      const txnsPromises = idChunks.map((chunk) =>
+        supabase.from("transactions").select("shift_id").in("shift_id", chunk),
+      );
+      const ppobPromises = idChunks.map((chunk) =>
         supabase
           .from("ppob_balances")
           .select("shift_id, initial_amount, final_amount")
-          .in("shift_id", ids)
-          .limit(10000),
+          .in("shift_id", chunk),
+      );
+      const bankPromises = idChunks.map((chunk) =>
         supabase
           .from("bank_balances")
           .select("shift_id, initial_amount, final_amount")
-          .in("shift_id", ids)
-          .limit(10000),
-      ]);
+          .in("shift_id", chunk),
+      );
+
+      const [{ data: profiles }, { data: allBranches }, txnResults, ppobResults, bankResults] =
+        await Promise.all([
+          supabase.from("profiles").select("id, username, branch_id"),
+          supabase.from("branches").select("id, name"),
+          Promise.all(txnsPromises),
+          Promise.all(ppobPromises),
+          Promise.all(bankPromises),
+        ]);
+
+      const txns = txnResults.flatMap((r) => r.data ?? []);
+      const ppobRows = ppobResults.flatMap((r) => r.data ?? []);
+      const bankRows = bankResults.flatMap((r) => r.data ?? []);
       const branchNameOf = new Map<string, string>();
       (allBranches ?? []).forEach((b) => branchNameOf.set(b.id, b.name));
       const txnCountByShift = new Map<string, number>();
@@ -215,8 +229,27 @@ function Reports() {
           ? ppobTerpakai({ ppobInitials, ppobFinals, topup: num(s.topup_request) })
           : null;
 
-        const bankInitialTotal = bankInitialsByShift.get(s.id) ?? 0;
-        const bankFinalTotal = bankFinalsByShift.get(s.id) ?? 0;
+        let bankInitialTotal = bankInitialsByShift.get(s.id) ?? 0;
+        let bankFinalTotal = bankFinalsByShift.get(s.id) ?? 0;
+
+        const impliedBankInitial = Math.max(
+          0,
+          num(s.modal_awal) - num(s.initial_physical_balance) - num(s.additional_capital),
+        );
+        if (bankInitialTotal === 0 && s.modal_awal !== null && impliedBankInitial > 0) {
+          bankInitialTotal = impliedBankInitial;
+        }
+
+        const impliedBankFinal = Math.max(
+          0,
+          num(s.modal_akhir) -
+            num(s.final_physical_balance) -
+            num(s.settlement_amount) -
+            num(s.total_expenses),
+        );
+        if (closed && bankFinalTotal === 0 && s.modal_akhir !== null && impliedBankFinal > 0) {
+          bankFinalTotal = impliedBankFinal;
+        }
 
         // Rumus Saldo Awal: Saldo semua rekening shift sebelumnya (Bank) + Saldo Awal Buka Kasir + Penambahan Modal
         // (PPOB tidak digabung karena berdiri sendiri)

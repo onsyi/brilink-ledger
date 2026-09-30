@@ -54,19 +54,31 @@ export function OwnerOverview({ username }: { username?: string | null }) {
       const { data: shifts, error } = await query;
       if (error) throw error;
       const ids = (shifts ?? []).map((s) => s.id);
-      const [{ data: txns }, { data: profiles }, { data: bankRows }] = await Promise.all([
-        ids.length
-          ? supabase.from("transactions").select("shift_id").in("shift_id", ids).limit(20000)
-          : Promise.resolve({ data: [] as never[] }),
+      const CHUNK_SIZE = 40;
+      const idChunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        idChunks.push(ids.slice(i, i + CHUNK_SIZE));
+      }
+
+      const txnsPromises = idChunks.map((chunk) =>
+        supabase.from("transactions").select("shift_id").in("shift_id", chunk),
+      );
+      const bankPromises = idChunks.map((chunk) =>
+        supabase
+          .from("bank_balances")
+          .select("shift_id, initial_amount, final_amount")
+          .in("shift_id", chunk),
+      );
+
+      const [{ data: profiles }, txnResults, bankResults] = await Promise.all([
         supabase.from("profiles").select("id, username"),
-        ids.length
-          ? supabase
-              .from("bank_balances")
-              .select("shift_id, initial_amount, final_amount")
-              .in("shift_id", ids)
-              .limit(5000)
-          : Promise.resolve({ data: [] as never[] }),
+        Promise.all(txnsPromises),
+        Promise.all(bankPromises),
       ]);
+
+      const txns = txnResults.flatMap((r) => r.data ?? []);
+      const bankRows = bankResults.flatMap((r) => r.data ?? []);
+
       const nameOf = (id: string) => (profiles ?? []).find((p) => p.id === id)?.username ?? "kasir";
       const txnCountByShift = new Map<string, number>();
       (txns ?? []).forEach((t) => {
@@ -85,8 +97,33 @@ export function OwnerOverview({ username }: { username?: string | null }) {
         );
       });
       const rows = (shifts ?? []).map((s) => {
-        const bankInitialTotal = bankInitialsByShift.get(s.id) ?? 0;
-        const bankFinalTotal = bankFinalsByShift.get(s.id) ?? 0;
+        let bankInitialTotal = bankInitialsByShift.get(s.id) ?? 0;
+        let bankFinalTotal = bankFinalsByShift.get(s.id) ?? 0;
+
+        const impliedBankInitial = Math.max(
+          0,
+          num(s.modal_awal) - num(s.initial_physical_balance) - num(s.additional_capital),
+        );
+        if (bankInitialTotal === 0 && s.modal_awal !== null && impliedBankInitial > 0) {
+          bankInitialTotal = impliedBankInitial;
+        }
+
+        const impliedBankFinal = Math.max(
+          0,
+          num(s.modal_akhir) -
+            num(s.final_physical_balance) -
+            num(s.settlement_amount) -
+            num(s.total_expenses),
+        );
+        if (
+          s.status !== "open" &&
+          bankFinalTotal === 0 &&
+          s.modal_akhir !== null &&
+          impliedBankFinal > 0
+        ) {
+          bankFinalTotal = impliedBankFinal;
+        }
+
         const rowSaldoAwal =
           s.modal_awal !== null
             ? num(s.modal_awal)

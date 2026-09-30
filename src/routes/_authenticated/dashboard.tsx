@@ -399,14 +399,19 @@ function OpenShiftPanel({
             type="submit"
             className="w-full"
             size="lg"
-            disabled={openShift.isPending || isBranchMissing}
+            disabled={
+              openShift.isPending ||
+              isBranchMissing ||
+              lastShift.isPending ||
+              (!hydrated && !lastShift.isError)
+            }
           >
-            {openShift.isPending ? (
+            {openShift.isPending || lastShift.isPending ? (
               <Loader2 className="mr-2 size-4 animate-spin" />
             ) : (
               <PlayCircle className="mr-2 size-4" />
             )}
-            Mulai shift
+            {lastShift.isPending ? "Memuat saldo shift..." : "Mulai shift"}
           </Button>
         </form>
       </section>

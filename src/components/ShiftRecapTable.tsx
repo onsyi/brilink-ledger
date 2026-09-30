@@ -123,30 +123,46 @@ export function ShiftRecapTable({ initialBranchFilter = "all" }: { initialBranch
         return { rows: [] };
       }
 
-      const [
-        { data: profiles },
-        { data: allBranches },
-        { data: txns },
-        { data: ppobRows },
-        { data: bankRows },
-      ] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, username")
-          .in("id", [...new Set(shiftRows?.map((s) => s.user_id))]),
-        supabase.from("branches").select("id, name"),
-        supabase.from("transactions").select("shift_id").in("shift_id", ids).limit(20000),
+      // Chunk IDs into batches of 40 to prevent hitting Supabase PostgREST max-rows (1,000) ceiling
+      // Each shift has up to 10 bank_balances and 5 ppob_balances.
+      // 40 shifts * 10 = 400 rows, safely well below 1,000.
+      const CHUNK_SIZE = 40;
+      const idChunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        idChunks.push(ids.slice(i, i + CHUNK_SIZE));
+      }
+
+      const txnsPromises = idChunks.map((chunk) =>
+        supabase.from("transactions").select("shift_id").in("shift_id", chunk),
+      );
+      const ppobPromises = idChunks.map((chunk) =>
         supabase
           .from("ppob_balances")
           .select("shift_id, provider_name, initial_amount, final_amount")
-          .in("shift_id", ids)
-          .limit(10000),
+          .in("shift_id", chunk),
+      );
+      const bankPromises = idChunks.map((chunk) =>
         supabase
           .from("bank_balances")
           .select("shift_id, bank_name, initial_amount, final_amount")
-          .in("shift_id", ids)
-          .limit(10000),
-      ]);
+          .in("shift_id", chunk),
+      );
+
+      const [{ data: profiles }, { data: allBranches }, txnResults, ppobResults, bankResults] =
+        await Promise.all([
+          supabase
+            .from("profiles")
+            .select("id, username")
+            .in("id", [...new Set(shiftRows?.map((s) => s.user_id))]),
+          supabase.from("branches").select("id, name"),
+          Promise.all(txnsPromises),
+          Promise.all(ppobPromises),
+          Promise.all(bankPromises),
+        ]);
+
+      const txns = txnResults.flatMap((r) => r.data ?? []);
+      const ppobRows = ppobResults.flatMap((r) => r.data ?? []);
+      const bankRows = bankResults.flatMap((r) => r.data ?? []);
 
       const nameOf = (id: string) => (profiles ?? []).find((p) => p.id === id)?.username ?? "Kasir";
       const branchNameOf = new Map<string, string>();
@@ -207,8 +223,30 @@ export function ShiftRecapTable({ initialBranchFilter = "all" }: { initialBranch
 
         const bankInitialMap = bankInitialMapByShift.get(s.id) ?? {};
         const bankFinalMap = bankFinalMapByShift.get(s.id) ?? {};
-        const bankInitialTotal = bankInitialTotalByShift.get(s.id) ?? 0;
-        const bankFinalTotal = bankFinalTotalByShift.get(s.id) ?? 0;
+        let bankInitialTotal = bankInitialTotalByShift.get(s.id) ?? 0;
+        let bankFinalTotal = bankFinalTotalByShift.get(s.id) ?? 0;
+
+        // Fallback safety: If bank balances were not captured in bank_balances table,
+        // calculate implied initial bank balance: modal_awal - initial_physical - additional_capital
+        const impliedBankInitial = Math.max(
+          0,
+          num(s.modal_awal) - num(s.initial_physical_balance) - num(s.additional_capital),
+        );
+        if (bankInitialTotal === 0 && s.modal_awal !== null && impliedBankInitial > 0) {
+          bankInitialTotal = impliedBankInitial;
+        }
+
+        // For closed shifts, implied final bank if missing:
+        const impliedBankFinal = Math.max(
+          0,
+          num(s.modal_akhir) -
+            num(s.final_physical_balance) -
+            num(s.settlement_amount) -
+            num(s.total_expenses),
+        );
+        if (closed && bankFinalTotal === 0 && s.modal_akhir !== null && impliedBankFinal > 0) {
+          bankFinalTotal = impliedBankFinal;
+        }
 
         const calculatedSaldoAwal = saldoAwal({
           initialPhysical: num(s.initial_physical_balance),
@@ -922,6 +960,13 @@ export function ShiftRecapTable({ initialBranchFilter = "all" }: { initialBranch
                 <span>Total Seluruh Rekening Bank</span>
                 <span className="num text-sm text-primary">{rupiah(bankModal.total)}</span>
               </div>
+
+              {Object.values(bankModal.bankMap).every((v) => !v) && bankModal.total > 0 && (
+                <p className="text-[11px] text-muted-foreground italic px-1">
+                  * Rincian spesifik per rekening bank tidak tersimpan pada shift ini. Total saldo
+                  diambil dari data pembukuan modal shift.
+                </p>
+              )}
             </div>
 
             <div className="mt-4 flex justify-end">
