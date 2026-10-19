@@ -17,11 +17,11 @@ pemilik proyek, jadi laporan ini sengaja berhenti di usulan.
 
 ## Ringkasan
 
-| Tingkat | Jumlah | Inti masalahnya                                                                                        |
-| ------- | ------ | ------------------------------------------------------------------------------------------------------ |
-| Kritis  | 1      | ~~Alamat email seluruh akun bisa dipanen tanpa login~~ — **sudah ditutup**                             |
-| Serius  | 4      | Hash password kasir lemah; rantai saldo bisa bercabang & putus; shift terbuka bisa dihapus tanpa jejak |
-| Minor   | 8      | Rumus latent, constraint & policy mati, bahaya replay migrasi                                          |
+| Tingkat | Jumlah | Inti masalahnya                                                                   |
+| ------- | ------ | --------------------------------------------------------------------------------- |
+| Kritis  | 1      | ~~Alamat email seluruh akun bisa dipanen tanpa login~~ — **sudah ditutup**        |
+| Serius  | 4      | 2 sudah ditutup (S-1, S-4); sisa: rantai saldo bisa bercabang (S-2) & putus (S-3) |
+| Minor   | 8      | Rumus latent, constraint & policy mati, bahaya replay migrasi                     |
 
 Yang perlu ditegaskan lebih dulu: **lapisan inti aplikasi ini sudah benar.**
 Kasir tidak bisa mempromosikan dirinya jadi owner, tidak bisa menulis angka
@@ -126,6 +126,19 @@ alih-alih memantulkan input. Keduanya hanya memperlambat pemanenan.
 ## SERIUS
 
 ### S-1 `admin_create_user` memakai bcrypt cost 6 — jalur satu-satunya pembuatan akun kasir justru yang paling lemah
+
+> **Status: sudah ditutup (19 Oktober 2026)** di
+> `20261019000002_strengthen_admin_password_hash.sql` — `gen_salt('bf', 10)`.
+>
+> **Belum selesai sepenuhnya, dan ini perlu tindakan Anda:** bcrypt menyimpan
+> cost di dalam hash-nya, jadi hash lama tetap bekerja tapi tetap cost 6. Akun
+> kasir yang sudah ada baru terlindungi setelah password-nya diganti. Daftar
+> akun yang masih tertinggal:
+>
+> ```sql
+> SELECT u.id, u.email FROM auth.users u
+> WHERE u.encrypted_password LIKE '$2a$06$%' OR u.encrypted_password LIKE '$2b$06$%';
+> ```
 
 **Lokasi:** `20260822000000_password_floor_and_policy_cleanup.sql:69`
 
@@ -265,6 +278,14 @@ termasuk yang sudah terjadi sebelum perbaikan ini.
 ---
 
 ### S-4 Owner bisa menghapus shift terbuka langsung lewat API, melewati seluruh penjagaan `cancel_open_shift`
+
+> **Status: sudah ditutup (19 Oktober 2026)** di
+> `20261019000001_revoke_direct_shift_delete.sql` — privilege DELETE dicabut
+> dari `authenticated` dan policy `shifts_delete_owner` dibuang.
+> `cancel_open_shift()` tetap bisa menghapus karena ia SECURITY DEFINER, dan
+> trigger `prevent_closed_shift_delete` sengaja dipertahankan sebagai lapis
+> kedua. Tidak ada perilaku aplikasi yang berubah: tidak ada kode klien yang
+> pernah menghapus baris `shifts`.
 
 **Lokasi:** `20260815000006_least_privilege_grants.sql:60` +
 `20260804000000_initial_schema.sql:125`
