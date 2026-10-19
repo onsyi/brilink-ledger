@@ -38,6 +38,42 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+type LoginSession = { access_token: string; refresh_token: string };
+
+type SignInResult = { session: LoginSession; error: null } | { session: null; error: string };
+
+/**
+ * Memanggil Edge Function `login`, yang menerjemahkan username menjadi email di
+ * server lalu menukar kredensial menjadi sesi. Dipakai lewat functions.invoke()
+ * agar URL dan apikey-nya tetap satu sumber dengan klien Supabase lainnya.
+ */
+async function signIn(identifier: string, password: string): Promise<SignInResult> {
+  const { data, error } = await supabase.functions.invoke<LoginSession>("login", {
+    body: { identifier, password },
+  });
+
+  if (error) {
+    // Pesan berbahasa Indonesia dari Edge Function ada di body respons, bukan di
+    // error.message -- supabase-js membungkus respons non-2xx sebagai
+    // FunctionsHttpError dan menyimpan Response-nya di `context`.
+    const context = (error as { context?: Response }).context;
+    if (context && typeof context.json === "function") {
+      try {
+        const body = (await context.json()) as { error?: string };
+        if (body.error) return { session: null, error: body.error };
+      } catch {
+        // Bukan JSON — jatuh ke pesan generik di bawah.
+      }
+    }
+    return { session: null, error: "Gagal masuk. Periksa koneksi Anda." };
+  }
+
+  if (!data?.access_token || !data.refresh_token) {
+    return { session: null, error: "Gagal masuk. Coba lagi." };
+  }
+  return { session: data, error: null };
+}
+
 function AuthPage() {
   const navigate = useNavigate();
   const [identifier, setIdentifier] = useState("");
@@ -72,26 +108,21 @@ function AuthPage() {
     submittingRef.current = true;
     setBusy(true);
     try {
-      let targetEmail = parsed.data.identifier;
-      if (!targetEmail.includes("@")) {
-        const { data: resolvedEmail } = await supabase.rpc("resolve_login_email", {
-          identifier: parsed.data.identifier,
-        });
-        if (resolvedEmail && typeof resolvedEmail === "string") {
-          targetEmail = resolvedEmail;
-        }
-      }
+      // Penerjemahan username -> email terjadi di Edge Function `login`, bukan
+      // di sini. Sebelumnya halaman ini memanggil resolve_login_email() sendiri,
+      // yang memaksa fungsi itu di-GRANT ke `anon` -- dan dengan publishable key
+      // yang ikut dikirim ke setiap pengunjung, siapa pun bisa memanen alamat
+      // email tiap akun hanya dengan menebak username (temuan K-1 di
+      // supabase/AUDIT.md). Sekarang email tidak pernah sampai ke browser:
+      // yang kembali hanya sepasang token.
+      // Tidak di-destructure: penyempitan tipe union-nya bergantung pada
+      // pembacaan properti, karena `error: string` bukan tipe literal.
+      const result = await signIn(parsed.data.identifier, parsed.data.password);
+      if (result.error !== null) throw new Error(result.error);
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email: targetEmail,
-        password: parsed.data.password,
-      });
-      if (error) {
-        if (error.message.toLowerCase().includes("invalid login credentials")) {
-          throw new Error("Email/username atau password salah.");
-        }
-        throw error;
-      }
+      const { error: setErr } = await supabase.auth.setSession(result.session);
+      if (setErr) throw setErr;
+
       navigate({ to: "/dashboard", replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal masuk");

@@ -6,7 +6,10 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi"] },
+  // supabase/functions berjalan di Deno, bukan di browser: globals, resolusi
+  // modul, dan toolchain-nya berbeda. Dikecualikan agar aturan browser di bawah
+  // tidak menilainya dengan asumsi yang salah.
+  { ignores: ["dist", ".output", ".vinxi", "supabase/functions"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],

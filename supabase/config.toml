@@ -385,6 +385,13 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# Sign-in dengan email atau username. Pemanggilnya belum punya JWT -- itu
+# justru intinya -- jadi verifikasinya harus dimatikan. Deploy produksinya:
+#   supabase functions deploy login --no-verify-jwt
+# Lihat supabase/functions/login/index.ts dan temuan K-1 di supabase/AUDIT.md.
+[functions.login]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
