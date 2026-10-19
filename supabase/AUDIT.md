@@ -17,11 +17,11 @@ pemilik proyek, jadi laporan ini sengaja berhenti di usulan.
 
 ## Ringkasan
 
-| Tingkat | Jumlah | Inti masalahnya                                                                |
-| ------- | ------ | ------------------------------------------------------------------------------ |
-| Kritis  | 1      | ~~Alamat email seluruh akun bisa dipanen tanpa login~~ — **sudah ditutup**     |
-| Serius  | 4      | S-1, S-2, S-4 ditutup di produksi; S-3 diperbaiki di kode, menunggu diterapkan |
-| Minor   | 8      | Rumus latent, constraint & policy mati, bahaya replay migrasi                  |
+| Tingkat | Jumlah | Inti masalahnya                                                            |
+| ------- | ------ | -------------------------------------------------------------------------- |
+| Kritis  | 1      | ~~Alamat email seluruh akun bisa dipanen tanpa login~~ — **sudah ditutup** |
+| Serius  | 4      | Keempatnya sudah ditutup dan terverifikasi di produksi                     |
+| Minor   | 8      | Rumus latent, constraint & policy mati, bahaya replay migrasi              |
 
 Yang perlu ditegaskan lebih dulu: **lapisan inti aplikasi ini sudah benar.**
 Kasir tidak bisa mempromosikan dirinya jadi owner, tidak bisa menulis angka
@@ -240,7 +240,7 @@ galat yang muncul ke kasir berupa pesan yang bisa dibaca, bukan `23505`.
 
 ### S-3 `owner_adjust_balance` tidak memeriksa shift penerus — koreksi saldo akhir memutus rantai yang sudah terkunci
 
-> **Status: diperbaiki di kode, BELUM diterapkan ke produksi (20 Oktober 2026)** —
+> **Status: sudah ditutup (20 Oktober 2026)** —
 > `20261020000001_propagate_balance_audit_to_next_shift.sql`.
 >
 > Dari dua opsi di bawah, yang dipilih adalah **rambatan**, dengan alasan yang
@@ -270,6 +270,14 @@ galat yang muncul ke kasir berupa pesan yang bisa dibaca, bukan `23505`.
 > Migrasi ini sengaja **tidak** menyentuh data yang ada: rantai yang sudah putus
 > dikoreksi owner satu per satu lewat tombol Audit, dengan jejak, bukan lewat
 > `UPDATE` massal.
+>
+> **Garis dasar 20 Oktober 2026, diukur tepat setelah migrasi diterapkan:
+> 0 batas putus** dari seluruh 274 shift tertutup di semua cabang. Jadi S-3
+> adalah lubang laten yang belum pernah terpicu — jalur audit lama memang tidak
+> punya penjagaan, tapi belum ada koreksi saldo akhir yang dilakukan setelah
+> shift penerusnya dibuka. Pemulihan manual "kasus Eci" di `20260909000006` juga
+> meninggalkan rantai yang konsisten. Angka ini layak diperiksa ulang berkala;
+> selama ia nol, rantai saldo antar-shift utuh.
 
 **Lokasi:** `20260909000008_fix_audit_override_ordering.sql` (definisi terakhir)
 
