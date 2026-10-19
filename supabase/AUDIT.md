@@ -17,11 +17,11 @@ pemilik proyek, jadi laporan ini sengaja berhenti di usulan.
 
 ## Ringkasan
 
-| Tingkat | Jumlah | Inti masalahnya                                                            |
-| ------- | ------ | -------------------------------------------------------------------------- |
-| Kritis  | 1      | ~~Alamat email seluruh akun bisa dipanen tanpa login~~ — **sudah ditutup** |
-| Serius  | 4      | 3 sudah ditutup (S-1, S-2, S-4); sisa: rantai saldo bisa putus (S-3)       |
-| Minor   | 8      | Rumus latent, constraint & policy mati, bahaya replay migrasi              |
+| Tingkat | Jumlah | Inti masalahnya                                                                |
+| ------- | ------ | ------------------------------------------------------------------------------ |
+| Kritis  | 1      | ~~Alamat email seluruh akun bisa dipanen tanpa login~~ — **sudah ditutup**     |
+| Serius  | 4      | S-1, S-2, S-4 ditutup di produksi; S-3 diperbaiki di kode, menunggu diterapkan |
+| Minor   | 8      | Rumus latent, constraint & policy mati, bahaya replay migrasi                  |
 
 Yang perlu ditegaskan lebih dulu: **lapisan inti aplikasi ini sudah benar.**
 Kasir tidak bisa mempromosikan dirinya jadi owner, tidak bisa menulis angka
@@ -239,6 +239,37 @@ galat yang muncul ke kasir berupa pesan yang bisa dibaca, bukan `23505`.
 ---
 
 ### S-3 `owner_adjust_balance` tidak memeriksa shift penerus — koreksi saldo akhir memutus rantai yang sudah terkunci
+
+> **Status: diperbaiki di kode, BELUM diterapkan ke produksi (20 Oktober 2026)** —
+> `20261020000001_propagate_balance_audit_to_next_shift.sql`.
+>
+> Dari dua opsi di bawah, yang dipilih adalah **rambatan**, dengan alasan yang
+> bisa diuji: kalau saldo akhir shift N salah catat maka saldo awal shift N+1
+> juga salah catat — keduanya merekam uang yang sama. Mengoreksi keduanya kekal
+> secara akuntansi (Laba N naik δ, Laba N+1 turun δ, total tidak bergeser).
+> Penolakan akan memaksa owner membongkar rantai dari ujung, yang dengan 274
+> shift tertutup justru mendorong orang kembali ke SQL langsung.
+>
+> Rambatannya berhenti di **satu langkah**: saldo akhir shift N+1 tidak
+> disentuh, jadi batas N+1→N+2 tetap utuh.
+>
+> Untuk koreksi `initial` arahnya dibalik — **ditolak** bila memutus batas
+> dengan shift pendahulu, dengan pesan yang menunjuk shift itu. Aturannya satu
+> arah: _koreksi dimasukkan di titik terawal yang salah, lalu mengalir ke
+> depan._ Shift pertama sebuah cabang tetap bebas dikoreksi.
+>
+> Ditambahkan juga `public.check_balance_chain()` (owner saja): mendaftar setiap
+> batas antar-shift yang saldo akhirnya tidak sama dengan saldo awal berikutnya,
+> sehingga rantai yang sudah putus sebelum perbaikan ini — lewat jalur audit
+> lama atau SQL langsung — bisa ditemukan. Kosong berarti rantai utuh.
+>
+> ```sql
+> select * from public.check_balance_chain();
+> ```
+>
+> Migrasi ini sengaja **tidak** menyentuh data yang ada: rantai yang sudah putus
+> dikoreksi owner satu per satu lewat tombol Audit, dengan jejak, bukan lewat
+> `UPDATE` massal.
 
 **Lokasi:** `20260909000008_fix_audit_override_ordering.sql` (definisi terakhir)
 
