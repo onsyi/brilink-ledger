@@ -17,11 +17,11 @@ pemilik proyek, jadi laporan ini sengaja berhenti di usulan.
 
 ## Ringkasan
 
-| Tingkat | Jumlah | Inti masalahnya                                                                   |
-| ------- | ------ | --------------------------------------------------------------------------------- |
-| Kritis  | 1      | ~~Alamat email seluruh akun bisa dipanen tanpa login~~ — **sudah ditutup**        |
-| Serius  | 4      | 2 sudah ditutup (S-1, S-4); sisa: rantai saldo bisa bercabang (S-2) & putus (S-3) |
-| Minor   | 8      | Rumus latent, constraint & policy mati, bahaya replay migrasi                     |
+| Tingkat | Jumlah | Inti masalahnya                                                            |
+| ------- | ------ | -------------------------------------------------------------------------- |
+| Kritis  | 1      | ~~Alamat email seluruh akun bisa dipanen tanpa login~~ — **sudah ditutup** |
+| Serius  | 4      | 3 sudah ditutup (S-1, S-2, S-4); sisa: rantai saldo bisa putus (S-3)       |
+| Minor   | 8      | Rumus latent, constraint & policy mati, bahaya replay migrasi              |
 
 Yang perlu ditegaskan lebih dulu: **lapisan inti aplikasi ini sudah benar.**
 Kasir tidak bisa mempromosikan dirinya jadi owner, tidak bisa menulis angka
@@ -171,6 +171,18 @@ kasir setelah perbaikan ini, karena hash lemahnya sudah lama ada.
 ---
 
 ### S-2 Eksklusivitas shift per cabang hanya dijaga `SELECT` tanpa kunci — dua kasir bisa membuka shift bersamaan dan merusak rantai saldo
+
+> **Status: sudah ditutup (20 Oktober 2026)** di
+> `20261020000000_one_open_shift_per_branch.sql`, memakai **kedua** opsi di
+> bawah: indeks unik parsial `shifts_one_open_per_branch` sebagai jaminan, dan
+> `pg_advisory_xact_lock` per cabang di dalam `open_shift_atomic` supaya kasir
+> kedua menerima pesan "Masih ada shift aktif di cabang ini" alih-alih galat
+> indeks mentah.
+>
+> Diterapkan saat produksi punya **nol** shift terbuka dan **nol** cabang yang
+> melanggar, jadi pembuatan indeksnya tidak mungkin gagal karena data lama.
+> Migrasinya memuat pemeriksaan data lebih dulu, sehingga replay di database
+> yang melanggar berhenti dengan pesan yang menyebut cabangnya.
 
 **Lokasi:** `20260907000002_align_saldo_awal_akhir_formulas.sql` (definisi
 terakhir `open_shift_atomic`)
