@@ -15,7 +15,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -227,7 +226,8 @@ export function BranchManagement() {
               <DialogDescription>
                 Yakin ingin menghapus{" "}
                 <span className="font-bold text-foreground">{deleteBranch.name}</span>? Jika cabang
-                memiliki riwayat shift, disarankan untuk **Menonaktifkan** cabang daripada
+                memiliki riwayat shift, disarankan untuk{" "}
+                <strong className="text-foreground">Menonaktifkan</strong> cabang daripada
                 menghapusnya.
               </DialogDescription>
             </DialogHeader>
@@ -255,22 +255,26 @@ export function BranchManagement() {
               <DialogTitle className="font-display text-xl font-bold">
                 Nonaktifkan Cabang?
               </DialogTitle>
-              <DialogDescription className="space-y-3 pt-2 text-sm text-muted-foreground">
-                <p>
-                  Anda akan menonaktifkan cabang{" "}
-                  <strong className="text-foreground">{deactivateBranch.name}</strong>.
-                </p>
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 leading-relaxed">
-                  ⚠️ <strong>Perhatian:</strong> Jika dinonaktifkan, kasir tidak akan bisa membuka
-                  shift baru di cabang ini. Jam buka/tutup toko harian diatur otomatis oleh kasir
-                  via <strong>Buka Shift</strong> dan <strong>Tutup Shift</strong>.
-                </div>
-                <p className="text-xs">
-                  Hanya nonaktifkan cabang jika gerai ini tutup permanen atau libur operasional
-                  jangka panjang.
-                </p>
+              {/* DialogDescription dirender sebagai <p> oleh Radix, jadi isinya
+                  tidak boleh memuat <p> atau <div>: browser menutup paragraf
+                  induknya lebih awal dan tata letaknya pecah. Teks utamanya
+                  tinggal di sini; blok peringatan dipindah keluar header. */}
+              <DialogDescription className="pt-2 text-sm text-muted-foreground">
+                Anda akan menonaktifkan cabang{" "}
+                <strong className="text-foreground">{deactivateBranch.name}</strong>.
               </DialogDescription>
             </DialogHeader>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 leading-relaxed">
+                ⚠️ <strong>Perhatian:</strong> Jika dinonaktifkan, kasir tidak akan bisa membuka
+                shift baru di cabang ini. Jam buka/tutup toko harian diatur otomatis oleh kasir via{" "}
+                <strong>Buka Shift</strong> dan <strong>Tutup Shift</strong>.
+              </div>
+              <p className="text-xs">
+                Hanya nonaktifkan cabang jika gerai ini tutup permanen atau libur operasional jangka
+                panjang.
+              </p>
+            </div>
             <DialogFooter className="mt-4">
               <Button variant="outline" onClick={() => setDeactivateBranch(null)}>
                 Batal

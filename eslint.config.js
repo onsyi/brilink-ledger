@@ -21,7 +21,19 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
-      "@typescript-eslint/no-unused-vars": "off",
+      // Dinyalakan setelah audit menemukan belasan import mati (lucide-react,
+      // helper ledger, hook react-query) yang ikut terbawa ke bundle dan
+      // menyesatkan pembaca soal apa yang sebenarnya dipakai di satu file.
+      // Argumen & variabel berawalan "_" tetap diizinkan untuk parameter yang
+      // memang harus ada demi posisinya.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
     },
   },
   eslintPluginPrettier,

@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/MoneyInput";
-import { BANKS, num, PPOB_PROVIDERS, rupiah } from "@/lib/ledger";
+import { BANKS, num, PPOB_PROVIDERS } from "@/lib/ledger";
 import { openShiftQuery } from "@/lib/queries";
 import { QueryError } from "@/components/QueryError";
 
@@ -438,7 +438,15 @@ function CloseShift() {
               >
                 Batal
               </Button>
-              <Button className="flex-1" disabled={close.isPending} onClick={() => close.mutate()}>
+              {/* type="button" wajib: dialog ini dirender di dalam <form>, dan
+                  Button tanpa type default ke "submit" — kliknya akan ikut
+                  men-submit form penutupan di belakang dialog. */}
+              <Button
+                type="button"
+                className="flex-1"
+                disabled={close.isPending}
+                onClick={() => close.mutate()}
+              >
                 {close.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
                 Ya, Tutup Shift
               </Button>

@@ -1,4 +1,10 @@
-import { Outlet, Link, createRootRouteWithContext, useRouter } from "@tanstack/react-router";
+import {
+  Outlet,
+  Link,
+  HeadContent,
+  createRootRouteWithContext,
+  useRouter,
+} from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
 
 function NotFoundComponent() {
@@ -59,11 +65,34 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  // Default yang dipakai halaman tanpa head()-nya sendiri. Tinggal di sini,
+  // bukan di index.html, supaya route yang punya head() menggantikannya alih-
+  // alih menambah tag <meta name="description"> kedua di samping yang statis.
+  head: () => ({
+    meta: [
+      {
+        name: "description",
+        content:
+          "Aplikasi pelaporan keuangan agen BRILink & PPOB: shift kasir, ledger dua kantong uang, piutang, dan laba bersih otomatis.",
+      },
+      { property: "og:type", content: "website" },
+    ],
+  }),
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
 
+/**
+ * `HeadContent` harus benar-benar dirender, kalau tidak seluruh `head()` di
+ * tiap route cuma data mati: judul tab tetap judul statis di index.html dan
+ * meta description per halaman tidak pernah terpasang.
+ */
 function RootComponent() {
-  return <Outlet />;
+  return (
+    <>
+      <HeadContent />
+      <Outlet />
+    </>
+  );
 }

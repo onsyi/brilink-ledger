@@ -210,8 +210,11 @@ export function ppobTerpakai(opts: {
   ppobFinals: number[];
   topup: number;
 }) {
-  const initialTotal = opts.ppobInitials.reduce((s, n) => s + n, 0);
-  const finalTotal = opts.ppobFinals.reduce((s, n) => s + n, 0);
+  // Dibersihkan lewat num() seperti saldoAwal/saldoAkhir. Tanpa ini satu
+  // elemen undefined/NaN membuat hasilnya NaN, dan NaN itu menjalar ke FBI
+  // beserta seluruh total kolomnya tanpa satu pun tanda di layar.
+  const initialTotal = opts.ppobInitials.reduce((s, n) => s + num(n), 0);
+  const finalTotal = opts.ppobFinals.reduce((s, n) => s + num(n), 0);
   return initialTotal + num(opts.topup) - finalTotal;
 }
 

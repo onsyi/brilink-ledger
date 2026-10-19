@@ -8,21 +8,27 @@ function createSupabaseClient() {
   const nodeEnv: Record<string, string | undefined> =
     typeof process !== "undefined" && process.env ? process.env : {};
 
-  const CLIENT_SUPABASE_URL = "https://blrazbccxocnhtpskjll.supabase.co";
-  const CLIENT_SUPABASE_KEY = "sb_publishable_ANNCG0Gfhqs8uAEvMnIXOg_7qEU_uff";
+  // Fallback terakhir supaya build yang kehilangan env var tetap bisa jalan.
+  // BUKAN override: versi sebelumnya menandai URL yang mengandung ref di bawah
+  // sebagai "project lama" lalu menimpanya dengan konstanta ini — padahal
+  // ref-nya sama persis dengan yang ada di .env, sehingga setiap env var selalu
+  // diabaikan. Akibatnya rotasi key atau pindah project lewat Vercel tidak
+  // berefek apa pun. Sekarang env var yang menang, konstanta hanya cadangan.
+  const FALLBACK_SUPABASE_URL = "https://blrazbccxocnhtpskjll.supabase.co";
+  const FALLBACK_SUPABASE_KEY = "sb_publishable_ANNCG0Gfhqs8uAEvMnIXOg_7qEU_uff";
 
+  // VITE_SUPABASE_PUBLISHABLE_KEY didahulukan: itu nama key gaya baru yang
+  // dipakai project ini (lihat AGENTS.md); VITE_SUPABASE_ANON_KEY disimpan
+  // sebagai alias untuk deployment lama yang masih memakai nama itu.
   const rawUrl = import.meta.env["VITE_SUPABASE_URL"] || nodeEnv["SUPABASE_URL"];
   const rawKey =
-    import.meta.env["VITE_SUPABASE_ANON_KEY"] ||
     import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
-    nodeEnv["SUPABASE_ANON_KEY"] ||
-    nodeEnv["SUPABASE_PUBLISHABLE_KEY"];
+    import.meta.env["VITE_SUPABASE_ANON_KEY"] ||
+    nodeEnv["SUPABASE_PUBLISHABLE_KEY"] ||
+    nodeEnv["SUPABASE_ANON_KEY"];
 
-  // If Vercel has the old deprecated project cached, override with client project
-  const isOldProject = rawUrl && rawUrl.includes("blrazbccxocnhtpskjll");
-
-  const SUPABASE_URL = !rawUrl || isOldProject ? CLIENT_SUPABASE_URL : rawUrl;
-  const SUPABASE_ANON_KEY = !rawKey || isOldProject ? CLIENT_SUPABASE_KEY : rawKey;
+  const SUPABASE_URL = rawUrl || FALLBACK_SUPABASE_URL;
+  const SUPABASE_ANON_KEY = rawKey || FALLBACK_SUPABASE_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     const missing = [
@@ -52,8 +58,11 @@ function createSupabaseClient() {
 let _supabase: ReturnType<typeof createSupabaseClient> | undefined;
 
 export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>, {
-  get(_, prop, receiver) {
+  get(_, prop) {
     if (!_supabase) _supabase = createSupabaseClient();
-    return Reflect.get(_supabase, prop, receiver);
+    // Receiver-nya klien sungguhan, bukan proxy ini: getter apa pun di
+    // supabase-js dievaluasi terhadap instance aslinya, sehingga state internal
+    // tetap terbaca kalau implementasinya nanti memakai field privat.
+    return Reflect.get(_supabase, prop, _supabase);
   },
 });

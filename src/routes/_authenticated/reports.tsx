@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 import {
   Loader2,
   ShieldCheck,
@@ -21,13 +20,10 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  BANKS,
   fbi,
   fsSetoran,
   hitungLaba,
-  labaFee,
   num,
-  PPOB_PROVIDERS,
   ppobTerpakai,
   rupiah,
   saldoAkhir,
@@ -36,7 +32,6 @@ import {
 import { cn } from "@/lib/utils";
 
 import { QueryError } from "@/components/QueryError";
-import { Button } from "@/components/ui/button";
 import { BalanceAuditDialog, RejectReportDialog } from "@/components/ShiftAuditDialogs";
 
 export const Route = createFileRoute("/_authenticated/reports")({

@@ -163,12 +163,6 @@ function OpenShiftPanel({
     }
   };
 
-  const openingTotal = modalAwal({
-    initialPhysical: num(initial),
-    bankInitials: BANKS.map((b) => num(banks[b])),
-    ppobInitials: PPOB_PROVIDERS.map((p) => num(ppob[p])),
-  });
-
   const bankInitialsTotal = BANKS.reduce((s, b) => s + num(banks[b]), 0);
   const ppobInitialsTotal = PPOB_PROVIDERS.reduce((s, p) => s + num(ppob[p]), 0);
   const fisikBankTotal = num(initial) + bankInitialsTotal;
@@ -976,14 +970,47 @@ function TransactionPanel({ shiftId }: { shiftId: string }) {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      // Hapus piutang tertaut bila ada sebelum menghapus transaksi
-      await supabase.from("receivables").delete().eq("transaction_id", id).eq("shift_id", shiftId);
-      const { error } = await supabase
+      // Transaksinya dihapus lebih dulu, baru piutangnya.
+      //
+      // Urutan sebaliknya -- yang dipakai sebelumnya -- membuang piutang lebih
+      // dulu dan mengabaikan error-nya. Kalau penghapusan transaksi kemudian
+      // gagal (RLS, shift ditutup oleh tab lain, kebijakan berubah), catatan
+      // utang pelanggan sudah lenyap sementara transaksinya tetap ada: uang
+      // yang ditahan pelanggan hilang dari pembukuan tanpa jejak.
+      //
+      // receivables.transaction_id memakai ON DELETE SET NULL, jadi tidak ada
+      // foreign key yang memaksa piutang dihapus lebih dulu -- tapi justru
+      // karena itu id piutangnya harus dicatat sekarang: begitu transaksinya
+      // hilang, transaction_id jadi NULL dan barisnya tidak bisa dicari lagi.
+      const { data: linked, error: lookupErr } = await supabase
+        .from("receivables")
+        .select("id")
+        .eq("transaction_id", id)
+        .eq("shift_id", shiftId);
+      if (lookupErr) throw lookupErr;
+
+      const { data: deleted, error } = await supabase
         .from("transactions")
         .delete()
         .eq("id", id)
-        .eq("shift_id", shiftId);
+        .eq("shift_id", shiftId)
+        .select("id");
       if (error) throw error;
+      if (!deleted || deleted.length === 0) {
+        throw new Error("Transaksi tidak terhapus — shift mungkin sudah ditutup. Muat ulang.");
+      }
+      const linkedIds = (linked ?? []).map((r) => r.id);
+      if (linkedIds.length === 0) return;
+      const { error: recvErr } = await supabase
+        .from("receivables")
+        .delete()
+        .in("id", linkedIds)
+        .eq("shift_id", shiftId);
+      if (recvErr) {
+        throw new Error(
+          `Transaksi terhapus, tapi piutang tertautnya gagal dihapus: ${recvErr.message}. Lapor ke owner agar dibereskan manual.`,
+        );
+      }
     },
     onSuccess: () => {
       toast.success("Transaksi dihapus");

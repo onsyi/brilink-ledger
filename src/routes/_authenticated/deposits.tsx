@@ -130,7 +130,9 @@ function Deposits() {
           <p className="mt-1 text-sm text-muted-foreground">
             {isOwner
               ? "Dokumentasi serah terima uang fisik dari kasir kepada pemilik."
-              : "Riwayat setoran uang fisik yang telah Anda serahkan kepada owner."}
+              : // Query di bawah memfilter deposit_confirmed = false, jadi yang
+                // tampil adalah setoran yang belum diakui owner — bukan riwayat.
+                "Setoran uang fisik Anda yang belum dikonfirmasi diterima owner."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

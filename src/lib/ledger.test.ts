@@ -2,8 +2,6 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   cashDelta,
-  modalAwal,
-  modalAkhir,
   saldoAwal,
   saldoAkhir,
   hitungLaba,

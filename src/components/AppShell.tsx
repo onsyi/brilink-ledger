@@ -9,7 +9,6 @@ import {
   LogOut,
   Wallet,
   WifiOff,
-  Loader2,
   Settings,
   ShieldCheck,
   UserCircle,
