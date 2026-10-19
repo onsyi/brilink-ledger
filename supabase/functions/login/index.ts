@@ -127,7 +127,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
 
     if (!resolved.ok) {
-      console.error("[login] resolve_login_email gagal", resolved.status, await resolved.text());
+      const detail = await resolved.text();
+      console.error("[login] resolve_login_email gagal", resolved.status, detail);
+      // 401/403 di sini berarti secret key-nya salah atau sudah mati, bukan
+      // gangguan sesaat. Project ini mematikan JWT anon/service_role lama
+      // (lihat AGENTS.md), jadi SUPABASE_SERVICE_ROLE_KEY yang disuntikkan
+      // platform TIDAK berfungsi di sini: BRILINK_SECRET_KEY wajib diisi key
+      // gaya baru `sb_secret_...`. Dibedakan supaya pesannya menunjuk ke
+      // konfigurasi, bukan menyuruh kasir "coba lagi" tanpa akhir.
+      if (resolved.status === 401 || resolved.status === 403) {
+        return json(500, {
+          error: "Layanan masuk belum dikonfigurasi dengan benar. Hubungi admin.",
+        });
+      }
       return json(500, { error: "Gagal memproses permintaan masuk. Coba lagi." });
     }
 
@@ -163,6 +175,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
     if (tokenResponse.status === 429) {
       return json(429, { error: "Terlalu banyak percobaan masuk. Tunggu sebentar." });
+    }
+    // GoTrue memakai 400 untuk kredensial salah dan 401 untuk apikey yang tidak
+    // diterima — jadi 401 di sini adalah publishable key yang salah atau mati,
+    // bukan password kasir yang keliru.
+    if (tokenResponse.status === 401) {
+      return json(500, {
+        error: "Layanan masuk belum dikonfigurasi dengan benar. Hubungi admin.",
+      });
     }
     console.error("[login] GoTrue menolak", tokenResponse.status, detail);
     return json(502, { error: "Layanan masuk sedang bermasalah. Coba lagi." });
